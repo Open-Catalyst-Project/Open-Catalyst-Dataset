@@ -2,4 +2,4 @@
 Workflow for creating and analyzing the Open Catalyst Dataset
 
 # Dependencies
-`conda install ase pymatgen`
+`conda install ase pymatgen pymemcache`

@@ -9,6 +9,7 @@ Note that some of these scripts were taken from
 __author__ = 'Kevin Tran'
 __email__ = 'ktran@andrew.cmu.edu'
 
+import abc
 import warnings
 import math
 import random
@@ -20,6 +21,7 @@ from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.core.surface import SlabGenerator, get_symmetrically_distinct_miller_indices
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.analysis.adsorption import AdsorbateSiteFinder
+from pymemcache.client import base
 
 
 ELEMENTS = {1: 'H', 2: 'He', 3: 'Li', 4: 'Be', 5: 'B', 6: 'C', 7: 'N', 8: 'O',
@@ -50,6 +52,19 @@ MAX_MILLER = 2
 MIN_XY = 8.
 
 
+CACHE = base.Client(('localhost', 11211))
+
+
+class BaseCache(abc.ABC):
+    @abc.abstractmethod
+    def get_key(self, hash_):
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def set_key(self, hash_):
+        raise NotImplementedError
+
+
 def sample_structures(bulk_database='bulks.db', n_species_weights=None):
     '''
     This parent function will randomly select an adsorption structure from a
@@ -73,17 +88,26 @@ def sample_structures(bulk_database='bulks.db', n_species_weights=None):
     # Choose which surface we want
     n_species = choose_n_species(n_species_weights)
     elements = choose_elements(bulk_database, n_species)
-    bulk = choose_bulk(bulk_database, elements)
-    surface = choose_surface(bulk)
+    bulk, mpid = choose_bulk(bulk_database, elements)
+    surface, millers, shift, top = choose_surface(bulk, mpid)
 
     # Choose the adsorbate and place it on the surface
     adsorbate = choose_adsorbate()
-    site = choose_site(surface, adsorbate)
+    site = choose_site(adsorbate, surface, millers, shift, top)
     adsorbed_surface = add_adsorbate_onto_surface(surface, adsorbate, site)
 
     # Add appropriate constraints
     adsorbed_surface = constrain_surface(adsorbed_surface)
     surface = constrain_surface(surface)
+
+    # Warn if we've already sampled this site
+    site_hash = (mpid, millers, shift, top, site)
+    if CACHE.get(site_hash) is True:
+        warnings.warn('We have already sampled this structure: '
+                      '(%s, %s, %.2f, %s, %s)' % site_hash)
+    else:
+        CACHE.set(site_hash, True)
+
     return adsorbed_surface, surface
 
 
@@ -151,30 +175,40 @@ def choose_bulk(bulk_database, elements):
                         values in the `ELEMENTS` constant in this submodule.
     Returns:
         atoms   `ase.Atoms` of the chosen bulk structure.
+        mpid    String indicating the the Materials Project ID number of the
+                bulk that was selected.
     '''
     db = ase.db.connect(bulk_database)
-    all_atoms = [row.toatoms() for row in db.select(elements)]
-    atoms = random.choice(all_atoms)
-    return atoms
+    bulks_subset = [(row.toatoms(), row.mpid) for row in db.select(elements)]
+    atoms, mpid = random.choice(bulks_subset)
+    return atoms, mpid
 
 
-def choose_surface(bulk_atoms):
+def choose_surface(bulk_atoms, mpid):
     '''
     Enumerates and chooses a random surface from a bulk structure.
 
     Arg:
         bulk_atoms  `ase.Atoms` object of the bulk you want to choose a
                     surfaces from.
+        mpid        String indicating the the Materials Project ID number of
+                    the bulk that was selected.
     Returns:
         surface_atoms   `ase.Atoms` of the chosen surface
+        millers         A 3-tuple of integers indicating the Miller indices of
+                        the chosen surface
+        shift           The y-direction shift used to determination the
+                        termination/cutoff of the surface
+        top             A Boolean indicating whether the chose surfaces was the
+                        top or the bottom of the originally enumerated surface.
     '''
-    surfaces = enumerate_surfaces(bulk_atoms)
-    surface_struct = random.choice(surfaces)
+    surfaces_info = enumerate_surfaces(bulk_atoms, mpid)
+    surface_struct, millers, shift, top = random.choice(surfaces_info)
     surface_atoms = AseAtomsAdaptor.get_atoms(surface_struct)
-    return surface_atoms
+    return surface_atoms, millers, shift, top
 
 
-def enumerate_surfaces(bulk_atoms, max_miller=MAX_MILLER):
+def enumerate_surfaces(bulk_atoms, mpid, max_miller=MAX_MILLER):
     '''
     Enumerate all the symmetrically distinct surfaces of a bulk structure. It
     will not enumerate surfaces with Miller indices above the `max_miller`
@@ -185,39 +219,48 @@ def enumerate_surfaces(bulk_atoms, max_miller=MAX_MILLER):
     Args:
         bulk_atoms  `ase.Atoms` object of the bulk you want to enumerate
                     surfaces from.
+        mpid        String indicating the the Materials Project ID number of
+                    the bulk that was selected.
         max_miller  An integer indicating the maximum Miller index of the surfaces
                     you are willing to enumerate. Increasing this argument will
                     increase the number of surfaces, but the surfaces will
                     generally become larger.
     Returns:
-        all_slabs   A list of `pymatgen.Structure` objects for each of the
-                    surfaces we have enumerated.
+        all_slabs_info  A list of 4-tuples containing:  `pymatgen.Structure`
+                        objects, 3-tuples for the Miller indices, floats for
+                        the shifts, and Booleans for "top".
     '''
-    bulk_struct = standardize_bulk(bulk_atoms)
+    all_slabs = CACHE.get(mpid)
+    if all_slabs is None:
 
-    all_slabs = []
-    for miller_indices in get_symmetrically_distinct_miller_indices(bulk_struct, MAX_MILLER):
-        slab_gen = SlabGenerator(initial_structure=bulk_struct,
-                                 miller_index=miller_indices,
-                                 min_slab_size=7.,
-                                 min_vacuum_size=20.,
-                                 lll_reduce=False,
-                                 center_slab=True,
-                                 primitive=True,
-                                 max_normal_search=1)
-        slabs = slab_gen.get_slabs(tol=0.3,
-                                   bonds=None,
-                                   max_broken_bonds=0,
-                                   symmetrize=False)
+        bulk_struct = standardize_bulk(bulk_atoms)
 
-        # If the bottoms of the slabs are different than the tops, then we want
-        # to consider them, too
-        flipped_slabs = [flip_struct(slab) for slab in slabs
-                         if is_structure_invertible(slab) is False]
-        slabs.extend(flipped_slabs)
+        all_slabs_info = []
+        for millers in get_symmetrically_distinct_miller_indices(bulk_struct, MAX_MILLER):
+            slab_gen = SlabGenerator(initial_structure=bulk_struct,
+                                     miller_index=millers,
+                                     min_slab_size=7.,
+                                     min_vacuum_size=20.,
+                                     lll_reduce=False,
+                                     center_slab=True,
+                                     primitive=True,
+                                     max_normal_search=1)
+            slabs = slab_gen.get_slabs(tol=0.3,
+                                       bonds=None,
+                                       max_broken_bonds=0,
+                                       symmetrize=False)
 
-        all_slabs.extend(slabs)
-    return all_slabs
+            # If the bottoms of the slabs are different than the tops, then we want
+            # to consider them, too
+            flipped_slabs = [flip_struct(slab) for slab in slabs
+                             if is_structure_invertible(slab) is False]
+
+            # Concatenate all the results together
+            slabs_info = [(slab, millers, slab.shift, True) for slab in slabs]
+            flipped_slabs_info = [(slab, millers, slab.shift, False) for slab in flipped_slabs]
+            all_slabs_info.extend(slabs_info + flipped_slabs_info)
+        CACHE.set(mpid, all_slabs_info)
+    return all_slabs_info
 
 
 def standardize_bulk(atoms):
@@ -295,21 +338,29 @@ def flip_struct(struct):
     return flipped_struct
 
 
-def choose_site(surface_atoms, adsorbate):
+def choose_site(adsorbate, mpid, surface_atoms, millers, shift, top):
     '''
     Enumerate all the sites of a surface and then select one of them at random.
 
     Args:
+        adsorbate       `ase.Atoms` of the adsorbate you want to place
         surface_atoms   `ase.Atoms` of the surface that you want to choose a
                         site from
-        adsorbate       `ase.Atoms` of the adsorbate you want to place
+        mpid            String indicating the the Materials Project ID number
+                        of the bulk that was selected.
+        millers         A 3-tuple of integers indicating the Miller indices of
+                        the chosen surface
+        shift           The y-direction shift used to determination the
+                        termination/cutoff of the surface
+        top             A Boolean indicating whether the chose surfaces was the
+                        top or the bottom of the originally enumerated surface.
     Returns:
         site    A 3-tuple of floats indicating the location of the chosen
                 adsorption site.
     '''
     # TODO:  Pari to update this section and add bidentate site selection
     surface_atoms = tile_atoms(surface_atoms)
-    sites = enumerate_adsorption_sites(surface_atoms)
+    sites = enumerate_adsorption_sites(surface_atoms, mpid, millers, shift, top)
     site = random.choice(sites)
     return site
 
@@ -334,20 +385,32 @@ def tile_atoms(atoms):
     return atoms_tiled
 
 
-def enumerate_adsorption_sites(atoms):
+def enumerate_adsorption_sites(atoms, mpid, millers, shift, top):
     '''
     A wrapper for pymatgen to get all of the adsorption sites of a slab.
 
     Arg:
         atoms   The slab where you are trying to find adsorption sites in
                 `ase.Atoms` format
+        mpid    String indicating the the Materials Project ID number of the
+                bulk that was selected.
+        millers A 3-tuple of integers indicating the Miller indices of the
+                chosen surface
+        shift   The y-direction shift used to determination the
+                termination/cutoff of the surface
+        top     A Boolean indicating whether the chose surfaces was the
+                top or the bottom of the originally enumerated surface.
     Output:
         sites   A `numpy.ndarray` object that contains the x-y-z coordinates of
                 the adsorptions sites
     '''
-    struct = AseAtomsAdaptor.get_structure(atoms)
-    sites_dict = AdsorbateSiteFinder(struct).find_adsorption_sites(put_inside=True)
-    sites = sites_dict['all']
+    sites = CACHE.get((mpid, millers, shift, top))
+    if sites is None:
+
+        struct = AseAtomsAdaptor.get_structure(atoms)
+        sites_dict = AdsorbateSiteFinder(struct).find_adsorption_sites(put_inside=True)
+        sites = sites_dict['all']
+        CACHE.set((mpid, millers, shift, top), sites)
     return sites
 
 
