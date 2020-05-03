@@ -31,7 +31,7 @@ VASP_FLAGS = {'ibrion': 2,
               'pp': 'PBE',
               'xc': 'PBE'}
 
-VASP_PP_PATH = '/private/home/sidgoyal/vasp_pp/5.4'
+VASP_PP_PATH = '/private/home/sidgoyal/vasp_pp/'
 
 
 def run_vasp(atoms, vasp_flags=None):
