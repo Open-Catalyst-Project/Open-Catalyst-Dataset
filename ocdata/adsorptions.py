@@ -11,7 +11,7 @@ __email__ = ['ktran@andrew.cmu.edu']
 
 import math
 from collections import defaultdict
-import random
+#import random
 import pickle
 import numpy as np
 import catkit
@@ -102,13 +102,13 @@ def sample_structures(bulk_database=BULK_PKL,
                     without the binding site information.
     '''
     # Choose which surface we want
-    n_elems = choose_n_elems(n_cat_elems_weights)
-    bulk, mpid = choose_bulk_pkl(bulk_database, n_elems)
-    surface, millers, shift, top = choose_surface(bulk)
+    n_elems, elem_sampling_str = choose_n_elems(n_cat_elems_weights)
+    bulk, mpid, index_of_bulk_atoms, bulk_sampling_str = choose_bulk_pkl(bulk_database, n_elems)
+    surface, millers, shift, top, surface_sampling_str = choose_surface_pkl(bulk, index_of_bulk_atoms)
 
     # Choose the adsorbate and place it on the surface
-    adsorbate, smiles, bond_indices = choose_adsorbate_pkl(adsorbate_database)
-    adsorbed_surface = add_adsorbate_onto_surface(surface, adsorbate, bond_indices)
+    adsorbate, smiles, bond_indices, adsorbate_sampling_str = choose_adsorbate_pkl(adsorbate_database)
+    adsorbed_surface, adsorbed_surface_sampling_str = add_adsorbate_onto_surface(surface, adsorbate, bond_indices)
 
     # Add appropriate constraints
     adsorbed_surface = constrain_surface(adsorbed_surface)
@@ -117,9 +117,19 @@ def sample_structures(bulk_database=BULK_PKL,
     # Do the hashing
     shift = round(shift, 3)
     sites = find_sites(surface, adsorbed_surface, bond_indices)
-    structures = {(mpid, millers, shift, top, smiles, sites): adsorbed_surface,
-                  (mpid, millers, shift, top): surface}
-    return structures
+
+    ads_sampling_str = adsorbate_sampling_str + "_" + adsorbed_surface_sampling_str 
+    bulk_sampling_str = elem_sampling_str + "_" + bulk_sampling_str + "_" + surface_sampling_str
+
+    adsorbed_bulk_dict = {"adsorbed_bulk_atomsobject" : adsorbed_surface,
+                          "adsorbed_bulk_metadata"    : (mpid, millers, shift, top, smiles, sites),
+                          "adsorbed_bulk_samplingstr" : bulk_sampling_str + "_" + ads_sampling_str}
+
+    bulk_dict = { "bulk_atomsobject" : surface, 
+                  "bulk_metadata"    : (mpid, millers, shift, top),
+                  "bulk_samplingstr" : bulk_sampling_str}
+
+    return adsorbed_bulk_dict, bulk_dict
 
 
 def choose_n_elems(n_cat_elems_weights):
@@ -141,8 +151,9 @@ def choose_n_elems(n_cat_elems_weights):
     weights = list(n_cat_elems_weights.values())
     assert math.isclose(sum(weights), 1)
 
-    n_elems = np.random.choice(n_elems, p=weights)
-    return n_elems
+    n_elem = np.random.choice(n_elems, p=weights)
+    sampling_string = str(n_elem) + "/" + str(len(n_elems))
+    return n_elem, sampling_string
 
 
 def choose_bulk_pkl(bulk_database, n_elems):
@@ -165,8 +176,20 @@ def choose_bulk_pkl(bulk_database, n_elems):
 
     try:
         # choose an index from the appropriate key, value pair in inv_index
-        row_bulk_index = np.random.choice(len(inv_index[n_elems]))
-        return inv_index[n_elems][row_bulk_index]
+        total_elements_for_key = len(inv_index[n_elems])
+        row_bulk_index = np.random.choice(total_elements_for_key)
+        bulk, mpid = inv_index[n_elems][row_bulk_index]
+
+        # to track the index in the flattened array of bulks
+        # which is lst: inv_index[1] + inv_index[2] + inv_index[3]
+        # not that `lst` is ordered as individual lists are ordered
+        index_in_flattened_array = 0
+        for i in range(1, n_elems):
+            index_in_flattened_array += len(inv_index[i])
+        index_in_flattened_array += row_bulk_index
+        sampling_string = str(row_bulk_index) + "/" + str(total_elements_for_key) + "_" + str(index_in_flattened_array) + "/" + str(len(inv_index[1]) + len(inv_index[2]) + len(inv_index[3]))
+
+        return bulk, mpid, index_in_flattened_array, sampling_string
 
     except IndexError:
         raise ValueError('Randomly chose to look for a %i-component material, '
@@ -203,6 +226,45 @@ def choose_bulk(bulk_database, n_elems):
                          'to the database or change the weights to exclude '
                          'this number of components.'
                          % (n_elems, n_elems, bulk_database))
+
+
+def read_from_precomputed_enumerations(index):
+    assert index < 11010
+    path = "/private/home/sidgoyal/Open-Catalyst-Dataset/ocdata/precomputed_structure_info/"
+    with open(path + str(index) + ".pkl", "rb") as f:
+        surfaces_info = pickle.load(f)
+    return surfaces_info
+
+
+def choose_surface_pkl(bulk_atoms, index_in_bulk_atoms):
+    '''
+    Enumerates and chooses a random surface from a bulk structure.
+    
+    TODO: add more
+
+    Arg:
+        bulk_atoms      `ase.Atoms` object of the bulk you want to choose a
+                        surfaces from.
+    Returns:
+        surface_atoms   `ase.Atoms` of the chosen surface
+        millers         A 3-tuple of integers indicating the Miller indices of
+                        the chosen surface
+        shift           The y-direction shift used to determination the
+                        termination/cutoff of the surface
+        top             A Boolean indicating whether the chose surfaces was the
+                        top or the bottom of the originally enumerated surface.
+    '''
+    surfaces_info = read_from_precomputed_enumerations(index_in_bulk_atoms)
+    total_surfaces_possible = len(surfaces_info)
+    index_surfaces_info = np.random.choice(total_surfaces_possible)
+
+    surface_struct, millers, shift, top = surfaces_info[index_surfaces_info]
+    unit_surface_atoms = AseAtomsAdaptor.get_atoms(surface_struct)
+    surface_atoms = tile_atoms(unit_surface_atoms)
+    tag_surface_atoms(bulk_atoms, surface_atoms)
+
+    surface_sampling_string = str(index_surfaces_info) + "/" + str(total_surfaces_possible)
+    return surface_atoms, millers, shift, top, surface_sampling_string
 
 
 def choose_surface(bulk_atoms):
@@ -529,11 +591,14 @@ def choose_adsorbate_pkl(adsorbate_database):
         simles          SMILES-formatted representation of the adsorbate
         bond_indices    list of integers indicating the indices of the atoms in
                         the adsorbate that are meant to be bonded to the surface
+        TODO
     '''
     with open(adsorbate_database, 'rb') as f:
         inv_index = pickle.load(f)
     element = np.random.choice(len(inv_index))
-    return inv_index[element]
+    adsorbate_sampling_string = str(element) + "/" + str(len(inv_index))
+    atoms, smiles, bond_indices = inv_index[element]
+    return atoms, smiles, bond_indices, adsorbate_sampling_string
 
 
 def choose_adsorbate(adsorbate_database):
@@ -601,8 +666,10 @@ def add_adsorbate_onto_surface(surface, adsorbate, bond_indices):
     # Then pick one from the reasonable configurations list as an output.
     reasonable_adsorbed_surfaces = [surface for surface in adsorbed_surfaces
                                     if is_config_reasonable(surface) is True]
-    adsorbed_surface = random.choice(reasonable_adsorbed_surfaces)
-    return adsorbed_surface
+    reasonable_adsorbed_surface_index = np.random.choice(len(reasonable_adsorbed_surfaces))
+    adsorbed_surface = reasonable_adsorbed_surfaces[reasonable_adsorbed_surface_index]
+    adsorbed_surface_sampling_string = str(reasonable_adsorbed_surface_index) + "/" + str(len(reasonable_adsorbed_surfaces))
+    return adsorbed_surface, adsorbed_surface_sampling_string
 
 
 def get_connectivity(adsorbate):
