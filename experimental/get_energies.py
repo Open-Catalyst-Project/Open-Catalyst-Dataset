@@ -19,24 +19,25 @@ def process_func(indices, dirlist, ans):
         extract_file(dir_name + "/relaxation_outputs.zip", "vasprun.xml", dir_name)
         trajname = dir_name + "/vasprun.xml"
         full_traj = ase.io.read(filename=trajname, index=':', format='vasp-xml')
-        ans[i] = full_traj[-1].get_potential_energy(apply_constraint=False)
+        val = full_traj[-1].get_potential_energy(apply_constraint=False)
+        print(dir_name, val)
+        ans.append((dir_name, val))
 
 
 if __name__ == "__main__":
-
     input_folder = "temp_download/"
     output = "ans/"
     id = sys.argv[1]
 
     dirlist = glob.glob(input_folder + "*/")
 
+    manager = multiprocessing.Manager()
+    ans = manager.list()
+
     k = multiprocessing.cpu_count()
 
     indices = [i for i in range(len(dirlist))]
     tasks = [indices[i::k] for i in range(k)]
-
-    ans = [0] * len(dirlist)
-
     procs = []
 
     # instantiating processes
@@ -49,8 +50,10 @@ if __name__ == "__main__":
     for proc in procs:
         proc.join()
 
+
     # write to file
     with open(output + str(id) + ".txt", 'w') as f:
         for i in range(len(ans)):
-            f.write(dirlist[i] + " " + str(ans[i]) + "\n")
-
+            name = ans[i][0].split("/")[-2]
+            val = str(ans[i][1])
+            f.write(name + " " + val + "\n")
