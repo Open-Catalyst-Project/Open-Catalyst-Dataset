@@ -113,7 +113,7 @@ def xyz_map(adbulk_id, fname, adenergy, tags, cell):
     return all_images
 
 def write_xyz(images, fname):
-    columns = (['symbols','positions', 'move_mask'])
+    columns = (['symbols','positions', 'move_mask', 'tags'])
     with open(fname,'w') as f:
         extxyz.write_xyz(f, images, columns=columns)
 
