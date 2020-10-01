@@ -88,7 +88,7 @@ if __name__ == "__main__":
     
     # Initialize lmdb paths
 #     db_path = os.path.join(args.db_path, "data.lmdb")
-    db_path = "data.lmdb"
+    db_path = "data/data.lmdb"
     db = lmdb.open(
             db_path,
             map_size=1099511627776 * 2,
@@ -105,13 +105,14 @@ if __name__ == "__main__":
 
     
     with db.begin(write=True) as txn:
-        for idx, bulk_info in tqdm(enumerate(bulks)):
+        for idx, bulk_info in tqdm(enumerate(bulks[:5])):
             bulk_atoms, mpid = bulk_info
             try:
                 configurations = generate_all_structures(bulk_atoms, adsorbate='*OH')
                 for surface, config_list in configurations.items():
-                    dl = a2g.convert_all(config_list, disable_tqdm=True)
-                    txn.put(f"{idx}".encode("ascii"), pickle.dumps(dl[0], protocol=-1))
+                    dls = a2g.convert_all(config_list, disable_tqdm=True)
+                    for dl in dls:
+                        txn.put(f"{idx}".encode("ascii"), pickle.dumps(dl, protocol=-1))
             except ValueError:
                 continue
     db.sync()
