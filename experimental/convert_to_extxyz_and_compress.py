@@ -63,7 +63,7 @@ def read_pkl(fname):
     with open(fname, 'rb') as f:
         return pickle.load(f)
 
-def read_file(fname, num):
+def read_file(fname):
     lst = []
     with open(fname, 'r') as f:
         for line in f:
@@ -79,7 +79,7 @@ if __name__ == "__main__":
 
     #EF task
     # format of split files is 001.txt upto 134.txt
-    split_name = sys.argv[1].zfill(3)
+    split_name = sys.argv[1].zfill(3) + ".txt"
     ef_train_fname = "/checkpoint/sidgoyal/electro_downloadables/ef_master_file_splits/" + split_name 
 
     ef_train_frames = read_file(ef_train_fname)
