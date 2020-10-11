@@ -7,6 +7,7 @@ import multiprocessing
 import sys
 import ase.io.extxyz as extxyz
 from from_zack import write_xyz
+import lzma
 
 def write_xyz_file(images, fname):
     columns = (['symbols','positions', 'move_mask', 'tags'])
