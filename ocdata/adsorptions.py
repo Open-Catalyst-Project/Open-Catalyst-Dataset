@@ -573,12 +573,14 @@ def add_adsorbate_onto_surface(surface, adsorbate, bond_indices, sample=True):
         bond_indices    A list of integers indicating the indices of the
                         binding atoms of the adsorbate
         sample (bool)   If True, we randomly sample a adsorbate-slab complex configuration.
-                        If False, we return all the configurations.                
+                        If False, we return all the configurations (list).                
     Returns:
-        ads_surface     An `ase graphic Atoms` object containing the adsorbate and
-                        surface. The bulk atoms will be tagged with `0`; the
-                        surface atoms will be tagged with `1`, and the the
-                        adsorbate atoms will be tagged with `2` or above.
+        reasonable_adsorbed_surface     If arg. sample=True, an `ase graphic Atoms` object 
+                                        containing the adsorbate and surface. If arg. sample=False, 
+                                        a list of `ase graphic Atoms` object containing the 
+                                        adsorbate and surface. The bulk atoms will be tagged 
+                                        with `0`; the surface atoms will be tagged with `1`, 
+                                        and the the adsorbate atoms will be tagged with `2` or above.
     '''
     # convert surface atoms into graphic atoms object
     surface_gratoms = catkit.Gratoms(surface)
@@ -600,7 +602,8 @@ def add_adsorbate_onto_surface(surface, adsorbate, bond_indices, sample=True):
                                               index=-1)
 
     # Filter out unreasonable structures.
-    # Then pick one from the reasonable configurations list as an output.
+    # If sample, then pick one from the reasonable configurations list as an output.
+    # Otherwise, return the list that contains all the configuration.
     reasonable_adsorbed_surface = [surface for surface in adsorbed_surface
                                     if is_config_reasonable(surface) is True]
     if sample:
