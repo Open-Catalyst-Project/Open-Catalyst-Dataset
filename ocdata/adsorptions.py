@@ -24,7 +24,7 @@ from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.core.surface import SlabGenerator, get_symmetrically_distinct_miller_indices
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.analysis.local_env import VoronoiNN
-from .base_atoms.pkls import BULK_PKL, ADSORBATE_PKL
+from .base_atoms.pkls import MAY12_BULK_PKL, ADSORBATE_PKL
 
 ELEMENTS = {1: 'H', 2: 'He', 3: 'Li', 4: 'Be', 5: 'B', 6: 'C', 7: 'N', 8: 'O',
             9: 'F', 10: 'Ne', 11: 'Na', 12: 'Mg', 13: 'Al', 14: 'Si', 15: 'P',
@@ -78,7 +78,7 @@ MAX_MILLER = 2
 MIN_XY = 8.
 
 
-def sample_structures(bulk_database=BULK_PKL,
+def sample_structures(bulk_database=MAY12_BULK_PKL,
                       adsorbate_database=ADSORBATE_PKL,
                       n_cat_elems_weights=None):
     '''
@@ -178,16 +178,7 @@ def choose_bulk_pkl(bulk_database, n_elems):
         # choose an index from the appropriate key, value pair in inv_index
         total_elements_for_key = len(inv_index[n_elems])
         row_bulk_index = np.random.choice(total_elements_for_key)
-        bulk, mpid = inv_index[n_elems][row_bulk_index]
-
-        # to track the index in the flattened array of bulks
-        # which is lst: inv_index[1] + inv_index[2] + inv_index[3]
-        # not that `lst` is ordered as individual lists are ordered
-        index_in_flattened_array = 0
-        for i in range(1, n_elems):
-            index_in_flattened_array += len(inv_index[i])
-        index_in_flattened_array += row_bulk_index
-        sampling_string = str(row_bulk_index) + "/" + str(total_elements_for_key) + "_" + str(index_in_flattened_array) + "/" + str(len(inv_index[1]) + len(inv_index[2]) + len(inv_index[3]))
+        bulk, mpid, sampling_string, index_in_flattened_array = inv_index[n_elems][row_bulk_index]
 
         return bulk, mpid, index_in_flattened_array, sampling_string
 
@@ -229,7 +220,6 @@ def choose_bulk(bulk_database, n_elems):
 
 
 def read_from_precomputed_enumerations(index):
-    assert index < 11010
     path = "/private/home/sidgoyal/Open-Catalyst-Dataset/ocdata/precomputed_structure_info/"
     with open(path + str(index) + ".pkl", "rb") as f:
         surfaces_info = pickle.load(f)
