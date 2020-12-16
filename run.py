@@ -9,8 +9,8 @@ val = sys.argv[1]
 
 np.random.seed(int(val))
 
-BULK_PATH = "/checkpoint/sidgoyal/electro_may3_100k/bulk/"
-ADSORBED_BULK_PATH = "/checkpoint/sidgoyal/electro_may3_100k/bulkadsorbate/"
+BULK_PATH = "/checkpoint/sidgoyal/electro_may6_100k_round2/bulk/"
+ADSORBED_BULK_PATH = "/checkpoint/sidgoyal/electro_may6_100k_round2/bulkadsorbate/"
 
 def write_pkl(d, path):
     with open(path, 'wb') as f:
