@@ -561,7 +561,7 @@ def choose_adsorbate(adsorbate_database):
     return atoms, smiles, bond_indices
 
 
-def add_adsorbate_onto_surface(surface, adsorbate, bond_indices):
+def add_adsorbate_onto_surface(surface, adsorbate, bond_indices, sample=True):
     '''
     There are a lot of small details that need to be considered when adding an
     adsorbate onto a surface. This function will take care of those details for
@@ -572,11 +572,15 @@ def add_adsorbate_onto_surface(surface, adsorbate, bond_indices):
         adsorbate       An `ase.Atoms` object of the adsorbate
         bond_indices    A list of integers indicating the indices of the
                         binding atoms of the adsorbate
+        sample (bool)   If True, we randomly sample a adsorbate-slab complex configuration.
+                        If False, we return all the configurations (list).                
     Returns:
-        ads_surface     An `ase graphic Atoms` object containing the adsorbate and
-                        surface. The bulk atoms will be tagged with `0`; the
-                        surface atoms will be tagged with `1`, and the the
-                        adsorbate atoms will be tagged with `2` or above.
+        reasonable_adsorbed_surface     If arg. sample=True, an `ase graphic Atoms` object 
+                                        containing the adsorbate and surface. If arg. sample=False, 
+                                        a list of `ase graphic Atoms` object containing the 
+                                        adsorbate and surface. The bulk atoms will be tagged 
+                                        with `0`; the surface atoms will be tagged with `1`, 
+                                        and the the adsorbate atoms will be tagged with `2` or above.
     '''
     # convert surface atoms into graphic atoms object
     surface_gratoms = catkit.Gratoms(surface)
@@ -593,16 +597,18 @@ def add_adsorbate_onto_surface(surface, adsorbate, bond_indices):
     # The "bonds" argument automatically take care of mono vs.
     # bidentate adsorption configuration.
     builder = catkit.gen.adsorption.Builder(surface_gratoms)
-    adsorbed_surfaces = builder.add_adsorbate(adsorbate_gratoms,
+    adsorbed_surface = builder.add_adsorbate(adsorbate_gratoms,
                                               bonds=bond_indices,
                                               index=-1)
 
     # Filter out unreasonable structures.
-    # Then pick one from the reasonable configurations list as an output.
-    reasonable_adsorbed_surfaces = [surface for surface in adsorbed_surfaces
+    # If sample, then pick one from the reasonable configurations list as an output.
+    # Otherwise, return the list that contains all the configuration.
+    reasonable_adsorbed_surface = [surface for surface in adsorbed_surface
                                     if is_config_reasonable(surface) is True]
-    adsorbed_surface = random.choice(reasonable_adsorbed_surfaces)
-    return adsorbed_surface
+    if sample:
+        reasonable_adsorbed_surface = random.choice(reasonable_adsorbed_surface)
+    return reasonable_adsorbed_surface
 
 
 def get_connectivity(adsorbate):
