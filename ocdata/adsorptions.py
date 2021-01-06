@@ -12,6 +12,7 @@ __email__ = ['ktran@andrew.cmu.edu']
 import math
 from collections import defaultdict
 #import random
+import os
 import pickle
 import numpy as np
 import catkit
@@ -25,58 +26,7 @@ from pymatgen.core.surface import SlabGenerator, get_symmetrically_distinct_mill
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.analysis.local_env import VoronoiNN
 from .base_atoms.pkls import MAY12_BULK_PKL, ADSORBATE_PKL
-
-ELEMENTS = {1: 'H', 2: 'He', 3: 'Li', 4: 'Be', 5: 'B', 6: 'C', 7: 'N', 8: 'O',
-            9: 'F', 10: 'Ne', 11: 'Na', 12: 'Mg', 13: 'Al', 14: 'Si', 15: 'P',
-            16: 'S', 17: 'Cl', 18: 'Ar', 19: 'K', 20: 'Ca', 21: 'Sc', 22: 'Ti',
-            23: 'V', 24: 'Cr', 25: 'Mn', 26: 'Fe', 27: 'Co', 28: 'Ni', 29:
-            'Cu', 30: 'Zn', 31: 'Ga', 32: 'Ge', 33: 'As', 34: 'Se', 35: 'Br',
-            36: 'Kr', 37: 'Rb', 38: 'Sr', 39: 'Y', 40: 'Zr', 41: 'Nb', 42:
-            'Mo', 43: 'Tc', 44: 'Ru', 45: 'Rh', 46: 'Pd', 47: 'Ag', 48: 'Cd',
-            49: 'In', 50: 'Sn', 51: 'Sb', 52: 'Te', 53: 'I', 54: 'Xe', 55:
-            'Cs', 56: 'Ba', 57: 'La', 58: 'Ce', 59: 'Pr', 60: 'Nd', 61: 'Pm',
-            62: 'Sm', 63: 'Eu', 64: 'Gd', 65: 'Tb', 66: 'Dy', 67: 'Ho', 68:
-            'Er', 69: 'Tm', 70: 'Yb', 71: 'Lu', 72: 'Hf', 73: 'Ta', 74: 'W',
-            75: 'Re', 76: 'Os', 77: 'Ir', 78: 'Pt', 79: 'Au', 80: 'Hg', 81:
-            'Tl', 82: 'Pb', 83: 'Bi', 84: 'Po', 85: 'At', 86: 'Rn', 87: 'Fr',
-            88: 'Ra', 89: 'Ac', 90: 'Th', 91: 'Pa', 92: 'U', 93: 'Np', 94:
-            'Pu', 95: 'Am', 96: 'Cm', 97: 'Bk', 98: 'Cf', 99: 'Es', 100: 'Fm',
-            101: 'Md', 102: 'No', 103: 'Lr', 104: 'Rf', 105: 'Db', 106: 'Sg',
-            107: 'Bh', 108: 'Hs', 109: 'Mt', 110: 'Ds', 111: 'Rg', 112: 'Cn',
-            113: 'Nh', 114: 'Fl', 115: 'Mc', 116: 'Lv', 117: 'Ts', 118: 'Og'}
-
-# Covalent radius of elements (unit is pm, 1pm=0.01 angstrom)
-# Value are taken from https://github.com/lmmentel/mendeleev
-covalent_radius = {'H': 32.0, 'He': 46.0, 'O': 63.0, 'F': 64.0, 'Ne': 67.0, 'N': 71.0,
-                   'C': 75.0, 'B': 85.0, 'Ar': 96.0, 'Cl': 99.0, 'Be': 102.0, 'S': 103.0,
-                   'Ni': 110.0, 'P': 111.0, 'Co': 111.0, 'Cu': 112.0, 'Br': 114.0,
-                   'Si': 116.0, 'Fe': 116.0, 'Se': 116.0, 'Kr': 117.0, 'Zn': 118.0,
-                   'Mn': 119.0, 'Pd': 120.0, 'Ge': 121.0, 'As': 121.0, 'Rg': 121.0,
-                   'Cr': 122.0, 'Ir': 122.0, 'Cn': 122.0, 'Pt': 123.0, 'Ga': 124.0,
-                   'Au': 124.0, 'Ru': 125.0, 'Rh': 125.0, 'Al': 126.0, 'Tc': 128.0,
-                   'Ag': 128.0, 'Ds': 128.0, 'Os': 129.0, 'Mt': 129.0, 'Xe': 131.0, 'Re': 131.0,
-                   'Li': 133.0, 'I': 133.0, 'Hg': 133.0, 'V': 134.0, 'Hs': 134.0, 'Ti': 136.0,
-                   'Cd': 136.0, 'Te': 136.0, 'Nh': 136.0, 'W': 137.0, 'Mo': 138.0, 'Mg': 139.0,
-                   'Sn': 140.0, 'Sb': 140.0, 'Bh': 141.0, 'In': 142.0, 'Rn': 142.0, 'Sg': 143.0,
-                   'Fl': 143.0, 'Tl': 144.0, 'Pb': 144.0, 'Po': 145.0, 'Ta': 146.0, 'Nb': 147.0,
-                   'At': 147.0, 'Sc': 148.0, 'Db': 149.0, 'Bi': 151.0, 'Hf': 152.0, 'Zr': 154.0,
-                   'Na': 155.0, 'Rf': 157.0, 'Og': 157.0, 'Lr': 161.0, 'Lu': 162.0, 'Mc': 162.0,
-                   'Y': 163.0, 'Ce': 163.0, 'Tm': 164.0, 'Er': 165.0, 'Es': 165.0, 'Ts': 165.0,
-                   'Ho': 166.0, 'Am': 166.0, 'Cm': 166.0, 'Dy': 167.0, 'Fm': 167.0, 'Eu': 168.0,
-                   'Tb': 168.0, 'Bk': 168.0, 'Cf': 168.0, 'Gd': 169.0, 'Pa': 169.0, 'Yb': 170.0,
-                   'U': 170.0, 'Ca': 171.0, 'Np': 171.0, 'Sm': 172.0, 'Pu': 172.0, 'Pm': 173.0,
-                   'Md': 173.0, 'Nd': 174.0, 'Th': 175.0, 'Lv': 175.0, 'Pr': 176.0, 'No': 176.0,
-                   'La': 180.0, 'Sr': 185.0, 'Ac': 186.0, 'K': 196.0, 'Ba': 196.0, 'Ra': 201.0,
-                   'Rb': 210.0, 'Fr': 223.0, 'Cs': 232.0}
-
-# We will enumerate surfaces with Miller indices <= MAX_MILLER
-MAX_MILLER = 2
-
-# We will create surfaces that are at least MIN_XY Angstroms wide. GASpy uses
-# 4.5, but our larger adsorbates here can be up to 3.6 Angstroms long. So 4.5 +
-# 3.6 ~= 8 Angstroms
-MIN_XY = 8.
-
+from .constants import COVALENT_RADIUS, MAX_MILLER, MIN_XY
 
 def sample_structures(bulk_database=MAY12_BULK_PKL,
                       adsorbate_database=ADSORBATE_PKL,
@@ -142,7 +92,8 @@ def choose_n_elems(n_cat_elems_weights):
                             values are the probabilities of selecting this
                             number. The probabilities must sum to 1.
     Returns:
-        n_elems     An integer showing how many species have been chosen.
+        n_elems             An integer showing how many species have been chosen.
+        sampling_string     Enum string of [chosen n_elem]/[total number of choices]
     '''
     if n_cat_elems_weights is None:
         n_cat_elems_weights = {1: 0.05, 2: 0.65, 3: 0.3}
@@ -167,8 +118,10 @@ def choose_bulk_pkl(bulk_database, n_elems):
         n_elems         An integer indicating how many elements should be
                         inside the bulk to be selected.
     Returns:
-        atoms   `ase.Atoms` of the chosen bulk structure.
-        mpid    A string indicating which MPID the bulk is
+        bulk                        `ase.Atoms` of the chosen bulk structure.
+        mpid                        A string indicating which MPID the bulk is
+        index_in_flattened_array    Index of the chosen structure in the array
+        sampling_string             A string to enumerate the sampled structure todo
     '''
     with open(bulk_database, 'rb') as f:
         inv_index = pickle.load(f)
@@ -221,7 +174,7 @@ def choose_bulk(bulk_database, n_elems):
 
 def read_from_precomputed_enumerations(index):
     path = "/private/home/sidgoyal/Open-Catalyst-Dataset/ocdata/precomputed_structure_info/"
-    with open(path + str(index) + ".pkl", "rb") as f:
+    with open(os.path.join(path, str(index) + ".pkl"), "rb") as f:
         surfaces_info = pickle.load(f)
     return surfaces_info
 
@@ -236,13 +189,14 @@ def choose_surface_pkl(bulk_atoms, index_in_bulk_atoms):
         bulk_atoms      `ase.Atoms` object of the bulk you want to choose a
                         surfaces from.
     Returns:
-        surface_atoms   `ase.Atoms` of the chosen surface
-        millers         A 3-tuple of integers indicating the Miller indices of
-                        the chosen surface
-        shift           The y-direction shift used to determination the
-                        termination/cutoff of the surface
-        top             A Boolean indicating whether the chose surfaces was the
-                        top or the bottom of the originally enumerated surface.
+        surface_atoms           `ase.Atoms` of the chosen surface
+        millers                 A 3-tuple of integers indicating the Miller indices of
+                                the chosen surface
+        shift                   The y-direction shift used to determination the
+                                termination/cutoff of the surface
+        top                     A Boolean indicating whether the chose surfaces was the
+                                top or the bottom of the originally enumerated surface.
+        surface_sampling_string Enum string of [chosen surface index]/[total surfaces]
     '''
     surfaces_info = read_from_precomputed_enumerations(index_in_bulk_atoms)
     total_surfaces_possible = len(surfaces_info)
@@ -255,7 +209,6 @@ def choose_surface_pkl(bulk_atoms, index_in_bulk_atoms):
 
     surface_sampling_string = str(index_surfaces_info) + "/" + str(total_surfaces_possible)
     return surface_atoms, millers, shift, top, surface_sampling_string
-
 
 def choose_surface(bulk_atoms):
     '''
@@ -468,9 +421,9 @@ def _find_surface_atoms_with_voronoi(bulk_atoms, surface_atoms):
                 surface atom.
     '''
     # Initializations
-    bulk_cn_dict = calculate_coordination_of_bulk_atoms(bulk_atoms)
     surface_struct = AseAtomsAdaptor.get_structure(surface_atoms)
     center_of_mass = calculate_center_of_mass(surface_struct)
+    bulk_cn_dict = calculate_coordination_of_bulk_atoms(bulk_atoms)
     voronoi_nn = VoronoiNN(tol=0.1)  # 0.1 chosen for better detection
 
     tags = []
@@ -577,11 +530,11 @@ def choose_adsorbate_pkl(adsorbate_database):
         adsorbate_database   A string pointing to the a pkl file that contains
                              an inverted index over different adsorbates.
     Returns:
-        atoms           `ase.Atoms` object of the adsorbate
-        simles          SMILES-formatted representation of the adsorbate
-        bond_indices    list of integers indicating the indices of the atoms in
-                        the adsorbate that are meant to be bonded to the surface
-        TODO
+        atoms                       `ase.Atoms` object of the adsorbate
+        smiles                      SMILES-formatted representation of the adsorbate
+        bond_indices                list of integers indicating the indices of the atoms in
+                                    the adsorbate that are meant to be bonded to the surface
+        adsorbate_sampling_string   Enum string specifying the sample, [index]/[total]
     '''
     with open(adsorbate_database, 'rb') as f:
         inv_index = pickle.load(f)
@@ -589,7 +542,6 @@ def choose_adsorbate_pkl(adsorbate_database):
     adsorbate_sampling_string = str(element) + "/" + str(len(inv_index))
     atoms, smiles, bond_indices = inv_index[element]
     return atoms, smiles, bond_indices, adsorbate_sampling_string
-
 
 def choose_adsorbate(adsorbate_database):
     '''
@@ -632,6 +584,8 @@ def add_adsorbate_onto_surface(surface, adsorbate, bond_indices):
                         surface. The bulk atoms will be tagged with `0`; the
                         surface atoms will be tagged with `1`, and the the
                         adsorbate atoms will be tagged with `2` or above.
+        adsorbed_surface_sampling_string    String specifying the sample, [index]/[total]
+                                            of reasonable adsorbed surfaces
     '''
     # convert surface atoms into graphic atoms object
     surface_gratoms = catkit.Gratoms(surface)
@@ -731,7 +685,7 @@ def is_config_reasonable(adslab):
         for nn in slab_nn:
             ads_elem = structure[idx].species_string
             nn_elem = structure[nn['site_index']].species_string
-            cov_bond_thres = 0.8 * (covalent_radius[ads_elem] + covalent_radius[nn_elem])/100
+            cov_bond_thres = 0.8 * (COVALENT_RADIUS[ads_elem] + COVALENT_RADIUS[nn_elem])/100
             actual_dist = adslab.get_distance(idx, nn['site_index'], mic=True)
             if actual_dist < cov_bond_thres:
                 return False
