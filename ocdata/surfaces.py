@@ -10,7 +10,7 @@ from collections import defaultdict
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.analysis.local_env import VoronoiNN
-from .constants import MAX_MILLER, MIN_XY
+from .constants import MIN_XY
 
 '''
 This class handles all things with a surface.

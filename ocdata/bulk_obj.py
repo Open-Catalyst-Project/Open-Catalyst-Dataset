@@ -11,7 +11,7 @@ from .constants import MAX_MILLER
 
 '''
 This class handles all things with the bulk.
-It also provides possible surfaces, used to create a surface object.
+It also provides possible surfaces, later used to create a Surface object.
 '''
 
 class Bulk():
@@ -39,16 +39,7 @@ class Bulk():
 
         try:
             if bulk_index:
-                # For example, if there are 100 bulks each of 1, 2, 3 elements, a bulk_index of 150
-                # would obtain self.n_elems = 2 and returns index = 50
-                # TODO: this assumes the inv_index database keys are in order
-                counts_cumul = np.cumsum([len(inv_index[key]) for key in inv_index])
-                assert bulk_index >= 0 and bulk_index < counts_cumul[-1], \
-                    f'bulk index must be between 0 and {counts_cumul[-1] - 1} inclusive'
-                db_index = np.searchsorted(counts_cumul, bulk_index, side='right') # 0, 1, or 2
-                self.n_elems = list(inv_index.keys())[db_index]
-                self.elem_sampling_str = str(self.n_elems) + "/" + str(len(inv_index))
-                row_bulk_index = bulk_index - counts_cumul[db_index]
+                row_bulk_index = self.find_n_elems_and_index(inv_index, bulk_index)
             else:
                 self.sample_n_elems()
                 assert self.n_elems in inv_index.keys()
@@ -62,6 +53,23 @@ class Bulk():
                              'to the database or change the weights to exclude '
                              'this number of components.'
                              % self.n_elems)
+
+    def find_n_elems_and_index(self, inv_index, bulk_index):
+        '''
+        Given the index of flattened in_vindex, finds the n_elem and non-flattened index.
+        For example, if there are 100 bulks each of 1, 2, 3 elements, a bulk_index of 150
+        would obtain self.n_elems = 2 and returns row_bulk_index = 50
+        TODO: this assumes the inv_index database keys are in order
+
+        Sets n_elems and elem_sampling_str; returns row_bulk_index
+        '''
+        counts_cumul = np.cumsum([len(inv_index[key]) for key in inv_index])
+        assert bulk_index >= 0 and bulk_index < counts_cumul[-1], \
+            f'bulk index must be between 0 and {counts_cumul[-1] - 1} inclusive'
+        db_index = np.searchsorted(counts_cumul, bulk_index, side='right') # 0, 1, or 2
+        self.n_elems = list(inv_index.keys())[db_index]
+        self.elem_sampling_str = str(self.n_elems) + "/" + str(len(inv_index))
+        return bulk_index - counts_cumul[db_index]
 
     def sample_n_elems(self, n_cat_elems_weights={1: 0.05, 2: 0.65, 3: 0.3}): # todo make these weights an input param?
         '''

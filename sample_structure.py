@@ -24,16 +24,15 @@ class StructureSampler():
         self.logger = logging.getLogger()
         logging.basicConfig(format='[%(asctime)s] %(levelname)s: %(message)s',
             datefmt='%H:%M:%S')
-        if self.args.verbose:
-            self.logger.setLevel(logging.INFO)
-        else:
-            self.logger.setLevel(logging.WARNING)
+        self.logger.setLevel(logging.INFO if self.args.verbose else logging.WARNING)
 
         np.random.seed(self.args.seed)
 
     def load_adsorbate(self):
-        # sample a random adsorbate, or load the specified one
-        # stores it in self.adsorbate
+        '''
+        Sample a random adsorbate, or load the specified one,
+        and stores it in self.adsorbate
+        '''
         if self.args.enumerate_all_structures: # can make this multiple indices in the future
             self.adsorbate = Adsorbate(self.args.adsorbate_db, self.args.adsorbate_index)
         else:
@@ -72,7 +71,10 @@ class StructureSampler():
                 self.combine_and_write(surface)
 
     def combine_and_write(self, surface, cur_bulk_index=None, cur_surface_index=None):
-        # writes output files for the surface itself and the surface+adsorbate
+        '''
+        Add the adsorbate onto a given surface in a Combined object.
+        Writes output files for the surface itself and the combined surface+adsorbate
+        '''
         combined = Combined(self.adsorbate, surface)
 
         bulk_dict = surface.get_bulk_dict()
@@ -87,11 +89,10 @@ class StructureSampler():
 
         write_vasp_input_files(bulk_dict['bulk_atomsobject'], bulk_dir)
         write_vasp_input_files(adsorbed_bulk_dict['adsorbed_bulk_atomsobject'], adsorbed_bulk_dir)
-        self.logger.info(f"wrote surface ({bulk_dict['bulk_samplingstr']}) to {bulk_dir}")
-        self.logger.info(f"wrote adsorbed surface ({adsorbed_bulk_dict['adsorbed_bulk_samplingstr']}) to {adsorbed_bulk_dir}")
-
         self.write_metadata_pkl(bulk_dict, os.path.join(bulk_dir, 'metadata.pkl'))
         self.write_metadata_pkl(adsorbed_bulk_dict, os.path.join(adsorbed_bulk_dir, 'metadata.pkl'))
+        self.logger.info(f"wrote surface ({bulk_dict['bulk_samplingstr']}) to {bulk_dir}")
+        self.logger.info(f"wrote adsorbed surface ({adsorbed_bulk_dict['adsorbed_bulk_samplingstr']}) to {adsorbed_bulk_dir}")
 
     def write_metadata_pkl(self, dict_to_write, path):
         file_path = os.path.join(path, 'metadata.pkl')
@@ -108,6 +109,7 @@ class StructureSampler():
 
         end = time.time()
         print(f'Done! ({round(end - start, 2)}s)')
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Sample adsorbate and bulk surface(s)')
@@ -137,7 +139,6 @@ def parse_args():
     elif args.seed is None:
             parser.error('Seed is required when sampling one random structure')
     return args
-
 
 if __name__ == '__main__':
     args = parse_args()
