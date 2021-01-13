@@ -1,96 +1,113 @@
 
 from ocdata.vasp import run_vasp, write_vasp_input_files
 from ocdata.adsorbates import Adsorbate
+from ocdata.bulk_obj import Bulk
 from ocdata.surfaces import Surface
 from ocdata.combined import Combined
 
 import argparse
+import logging
 import math
 import numpy as np
 import os
 import pickle
 import time
 
-def choose_n_elems(n_cat_elems_weights={1: 0.05, 2: 0.65, 3: 0.3}):
-    '''
-    Chooses the number of species we should look for in this sample.
-
-    Arg:
-        n_cat_elems_weights A dictionary whose keys are integers containing the
-                            number of species you want to consider and whose
-                            values are the probabilities of selecting this
-                            number. The probabilities must sum to 1.
-    Returns:
-        n_elems             An integer showing how many species have been chosen.
-        sampling_string     Enum string of [chosen n_elem]/[total number of choices]
-    '''
-
-    n_elems = list(n_cat_elems_weights.keys())
-    weights = list(n_cat_elems_weights.values())
-    assert math.isclose(sum(weights), 1)
-
-    n_elem = np.random.choice(n_elems, p=weights)
-    sampling_string = str(n_elem) + "/" + str(len(n_elems))
-    return n_elem, sampling_string
 
 class StructureSampler():
     def __init__(self, args):
         # set up args, random seed, directories
         self.args = args
+        if self.args.bulk_indices:
+            self.bulk_indices_list = self.args.bulk_indices.split(',')
+
+        self.logger = logging.getLogger()
+        logging.basicConfig(format='[%(asctime)s] %(levelname)s: %(message)s',
+            datefmt='%H:%M:%S')
+        if self.args.verbose:
+            self.logger.setLevel(logging.INFO)
+        else:
+            self.logger.setLevel(logging.WARNING)
 
         np.random.seed(self.args.seed)
-        output_name_template = f'random{self.args.seed}'
-        self.bulk_dir = os.path.join(self.args.output_dir, output_name_template, 'surface')
-        self.adsorbed_bulk_dir = os.path.join(self.args.output_dir, output_name_template, 'adsorbed_surface')
-
-        # todo all combos
 
     def load_adsorbate(self):
         # sample a random adsorbate, or load the specified one
-        if self.args.adsorbate_index: # can make this multiple indices in the future
-            self.adsorbate = Adsorbate(self.args.adsorbate_index, self.args.adsorbate_db)
+        # stores it in self.adsorbate
+        if self.args.enumerate_all_structures: # can make this multiple indices in the future
+            self.adsorbate = Adsorbate(self.args.adsorbate_db, self.args.adsorbate_index)
         else:
             self.adsorbate = Adsorbate(self.args.adsorbate_db)
 
-    def load_surfaces(self):
-        # todo: make a list of surfaces
-        n_elems, elem_sampling_str = choose_n_elems() # todo make weights an input param
-        self.surface = Surface(self.args.bulk_db, n_elems, elem_sampling_str, self.args.precomputed_structures)
+    def load_bulks(self):
+        '''
+        Loads bulk structures (one random or a list of specified ones)
+        and stores them in self.all_bulks
+        '''
+        self.all_bulks = []
+        with open(self.args.bulk_db, 'rb') as f:
+            inv_index = pickle.load(f)
 
+        if self.args.enumerate_all_structures:
+            for ind in self.bulk_indices_list:
+                self.all_bulks.append(Bulk(inv_index, self.args.precomputed_structures, int(ind)))
+        else:
+            self.all_bulks.append(Bulk(inv_index, self.args.precomputed_structures))
 
-    def run(self):
+    def load_and_write_surfaces(self):
+        '''
+        Loops through all bulks and chooses one random or all possible surfaces;
+        writes info for that surface and combined surface+adsorbate
+        '''
+        for bulk_ind, bulk in enumerate(self.all_bulks):
+            possible_surfaces = bulk.get_possible_surfaces()
+            if self.args.enumerate_all_structures:
+                self.logger.info(f'Enumerating all {len(possible_surfaces)} surfaces for bulk {self.bulk_indices_list[bulk_ind]}')
+                for surface_ind, surface_info in enumerate(possible_surfaces):
+                    surface = Surface(bulk, surface_info, surface_ind, len(possible_surfaces))
+                    self.combine_and_write(surface, self.bulk_indices_list[bulk_ind], surface_ind)
+            else:
+                surface_info_index = np.random.choice(len(possible_surfaces))
+                surface = Surface(bulk, possible_surfaces[surface_info_index], surface_info_index, len(possible_surfaces))
+                self.combine_and_write(surface)
 
-        start = time.time()
+    def combine_and_write(self, surface, cur_bulk_index=None, cur_surface_index=None):
+        # writes output files for the surface itself and the surface+adsorbate
+        combined = Combined(self.adsorbate, surface)
 
-        self.load_adsorbate()
-        self.load_surfaces()
-
-        # todo: loop through surfaces
-        combined = Combined(self.adsorbate, self.surface)
-
-        bulk_dict = self.surface.get_bulk_dict()
+        bulk_dict = surface.get_bulk_dict()
         adsorbed_bulk_dict = combined.get_adsorbed_bulk_dict()
 
-        write_vasp_input_files(bulk_dict["bulk_atomsobject"], self.bulk_dir)
-        write_vasp_input_files(adsorbed_bulk_dict["adsorbed_bulk_atomsobject"], self.adsorbed_bulk_dir)
+        if self.args.enumerate_all_structures:
+            output_name_template = f'{self.args.adsorbate_index}_{cur_bulk_index}_surface{cur_surface_index}'
+        else:
+            output_name_template = f'random{self.args.seed}'
+        bulk_dir = os.path.join(self.args.output_dir, output_name_template, 'surface')
+        adsorbed_bulk_dir = os.path.join(self.args.output_dir, output_name_template, 'adsorbed_surface')
 
-        self.write_metadata_pkl(bulk_dict, os.path.join(self.bulk_dir, 'metadata.pkl'))
-        self.write_metadata_pkl(adsorbed_bulk_dict, os.path.join(self.adsorbed_bulk_dir, 'metadata.pkl'))
+        write_vasp_input_files(bulk_dict['bulk_atomsobject'], bulk_dir)
+        write_vasp_input_files(adsorbed_bulk_dict['adsorbed_bulk_atomsobject'], adsorbed_bulk_dir)
+        self.logger.info(f"wrote surface ({bulk_dict['bulk_samplingstr']}) to {bulk_dir}")
+        self.logger.info(f"wrote adsorbed surface ({adsorbed_bulk_dict['adsorbed_bulk_samplingstr']}) to {adsorbed_bulk_dir}")
 
-        end = time.time()
-        print(f'Done ({round(end - start, 2)}s)! Seed = {self.args.seed}')
+        self.write_metadata_pkl(bulk_dict, os.path.join(bulk_dir, 'metadata.pkl'))
+        self.write_metadata_pkl(adsorbed_bulk_dict, os.path.join(adsorbed_bulk_dir, 'metadata.pkl'))
 
     def write_metadata_pkl(self, dict_to_write, path):
         file_path = os.path.join(path, 'metadata.pkl')
         with open(path, 'wb') as f:
             pickle.dump(dict_to_write, f)
 
-'''
-currently testing with:
-python sample_structure.py --bulk_db ocdata/base_atoms/pkls/bulks_may12.pkl --adsorbate_db ocdata/base_atoms/pkls/adsorbates.pkl \
---precomputed_structures /private/home/sidgoyal/Open-Catalyst-Dataset/ocdata/precomputed_structure_info --output_dir junk --seed 1
-'''
+    def run(self):
 
+        start = time.time()
+
+        self.load_adsorbate()
+        self.load_bulks()
+        self.load_and_write_surfaces()
+
+        end = time.time()
+        print(f'Done! ({round(end - start, 2)}s)')
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Sample adsorbate and bulk surface(s)')
@@ -105,19 +122,19 @@ def parse_args():
     # for optimized (automatically try to use optimized if this is provided)
     parser.add_argument('--precomputed_structures', type=str, default=None, help='Root directory of precomputed structures')
 
-    # enumerating all combinations:
+    # required args for enumerating all combinations:
     parser.add_argument('--enumerate_all_structures', action='store_true', default=False,
         help='Find all possible structures given a specific adsorbate and a list of bulks')
     parser.add_argument('--adsorbate_index', type=int, default=None, help='adsorbate index (int)')
-    # todo need to provide num elems?
-    parser.add_argument('--bulk_indices', type=str, default=None, help='Comma separated list of bulk indices') # TODO make file later
+    parser.add_argument('--bulk_indices', type=str, default=None, help='Comma separated list of bulk indices') # TODO change to file later
+
+    parser.add_argument('--verbose', action='store_true', default=False, help='Log detailed info')
 
     args = parser.parse_args()
     if args.enumerate_all_structures:
         if args.adsorbate_index is None or args.bulk_indices is None:
             parser.error('Enumerating all structures requires adsorbate index and bulk indices file')
-    else:
-        if args.seed is None:
+    elif args.seed is None:
             parser.error('Seed is required when sampling one random structure')
     return args
 

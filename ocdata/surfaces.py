@@ -10,11 +10,11 @@ from collections import defaultdict
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.analysis.local_env import VoronoiNN
-from .constants import MIN_XY
+from .constants import MAX_MILLER, MIN_XY
 
 '''
-This class handles all things with the surface.
-Selects a bulk and surface, and stores info as an object
+This class handles all things with a surface.
+Create one with a bulk and one of its selected surfaces
 '''
 
 def constrain_surface(atoms):
@@ -45,82 +45,15 @@ def constrain_surface(atoms):
 
 
 class Surface():
-    def __init__(self, bulk_database, n_elems, elem_sampling_str, precomputed_structures=None):
-        self.n_elems = n_elems
-        self.elem_sampling_str = elem_sampling_str
-        self.precomputed_structures = precomputed_structures
+    def __init__(self, bulk_object, surface_info, surface_index, total_surfaces_possible):
+        self.bulk_object = bulk_object
+        surface_struct, self.millers, self.shift, self.top = surface_info
+        self.surface_sampling_str = str(surface_index) + "/" + str(total_surfaces_possible)
 
-        self.choose_bulk_pkl(bulk_database)
-        self.choose_surface_pkl(self.bulk_atoms, self.index_of_bulk_atoms)
-        self.constrained_surface = constrain_surface(self.surface_atoms)
-
-    def choose_bulk_pkl(self, bulk_database):
-        '''
-        Chooses a bulk from our pkl file at random as long as the bulk contains
-        the specified number of elements in any composition.
-
-        Args:
-            bulk_database   A string pointing to the pkl file that contains
-                            the bulks you want to consider.
-            n_elems         An integer indicating how many elements should be
-                            inside the bulk to be selected.
-
-        Sets:
-            bulk                        `ase.Atoms` of the chosen bulk structure.
-            mpid                        A string indicating which MPID the bulk is
-            index_in_flattened_array    Index of the chosen structure in the array
-            sampling_string             A string to enumerate the sampled structure todo
-        '''
-        with open(bulk_database, 'rb') as f:
-            inv_index = pickle.load(f)
-        assert self.n_elems in inv_index.keys()
-
-        try:
-            # choose an index from the appropriate key, value pair in inv_index
-            total_elements_for_key = len(inv_index[self.n_elems])
-            row_bulk_index = np.random.choice(total_elements_for_key)
-            self.bulk_atoms, self.mpid, self.bulk_sampling_str, self.index_of_bulk_atoms = inv_index[self.n_elems][row_bulk_index]
-
-        except IndexError:
-            raise ValueError('Randomly chose to look for a %i-component material, '
-                             'but no such materials exist in %s. Please add one '
-                             'to the database or change the weights to exclude '
-                             'this number of components.'
-                             % (self.n_elems, bulk_database))
-
-    def choose_surface_pkl(self, bulk_atoms, index_in_bulk_atoms): # todo better style to not pass in these args?
-        '''
-        Enumerates and chooses a random surface from a bulk structure.
-        
-        TODO: add more
-
-        Arg:
-            bulk_atoms      `ase.Atoms` object of the bulk you want to choose a
-                            surfaces from.
-        Sets:
-            surface_atoms           `ase.Atoms` of the chosen surface
-            millers                 A 3-tuple of integers indicating the Miller indices of
-                                    the chosen surface
-            shift                   The y-direction shift used to determination the
-                                    termination/cutoff of the surface
-            top                     A Boolean indicating whether the chose surfaces was the
-                                    top or the bottom of the originally enumerated surface.
-            surface_sampling_string Enum string of [chosen surface index]/[total surfaces]
-        '''
-        surfaces_info = self.read_from_precomputed_enumerations(index_in_bulk_atoms)
-        total_surfaces_possible = len(surfaces_info)
-        index_surfaces_info = np.random.choice(total_surfaces_possible)
-
-        surface_struct, self.millers, self.shift, self.top = surfaces_info[index_surfaces_info]
         unit_surface_atoms = AseAtomsAdaptor.get_atoms(surface_struct)
         self.surface_atoms = self.tile_atoms(unit_surface_atoms)
-        self.tag_surface_atoms(bulk_atoms, self.surface_atoms)
-        self.surface_sampling_str = str(index_surfaces_info) + "/" + str(total_surfaces_possible)
-
-    def read_from_precomputed_enumerations(self, index):
-        with open(os.path.join(self.precomputed_structures, str(index) + ".pkl"), "rb") as f:
-            surfaces_info = pickle.load(f)
-        return surfaces_info
+        self.tag_surface_atoms(self.bulk_object.bulk_atoms, self.surface_atoms)
+        self.constrained_surface = constrain_surface(self.surface_atoms)
 
     def tile_atoms(self, atoms): # todo style wise: better to put inside or outside of class?
         '''
@@ -284,9 +217,10 @@ class Surface():
         return tags
 
     def get_bulk_dict(self):
+        self.overall_sampling_str = self.bulk_object.elem_sampling_str + "_" + self.bulk_object.bulk_sampling_str + "_" + self.surface_sampling_str
         return { "bulk_atomsobject" : self.constrained_surface,
-                 "bulk_metadata"    : (self.mpid,
+                 "bulk_metadata"    : (self.bulk_object.mpid,
                                        self.millers,
                                        round(self.shift, 3),
                                        self.top),
-                 "bulk_samplingstr" : self.bulk_sampling_str}
+                 "bulk_samplingstr" : self.overall_sampling_str}

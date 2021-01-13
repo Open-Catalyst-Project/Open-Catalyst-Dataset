@@ -1,6 +1,7 @@
 
 import catkit
 import numpy as np
+import warnings
 
 from ase import neighborlist
 from ase.neighborlist import natural_cutoffs
@@ -14,7 +15,7 @@ This class handles all things with the adsorbate placed on a surface
 Needs one adsorbate and one surface to create this class
 '''
 
-class Combined(): # pass in one bulk at a time
+class Combined():
     # adds adsorbate to surface, does the constraining, and aggregates all data necessary to write out
     def __init__(self, adsorbate, surface):
         self.adsorbate = adsorbate
@@ -63,15 +64,17 @@ class Combined(): # pass in one bulk at a time
         # The "bonds" argument automatically take care of mono vs.
         # bidentate adsorption configuration.
         builder = catkit.gen.adsorption.Builder(surface_gratoms)
-        adsorbed_surfaces = builder.add_adsorbate(adsorbate_gratoms,
-                                                  bonds=bond_indices,
-                                                  index=-1)
+        with warnings.catch_warnings(): # suppress potential square root warnings
+            warnings.simplefilter('ignore')
+            adsorbed_surfaces = builder.add_adsorbate(adsorbate_gratoms,
+                                                      bonds=bond_indices,
+                                                      index=-1)
 
         # Filter out unreasonable structures.
         # Then pick one from the reasonable configurations list as an output.
         reasonable_adsorbed_surfaces = [surface for surface in adsorbed_surfaces
                                         if self.is_config_reasonable(surface)]
-        reasonable_adsorbed_surface_index = np.random.choice(len(reasonable_adsorbed_surfaces))
+        reasonable_adsorbed_surface_index = np.random.choice(len(reasonable_adsorbed_surfaces)) # todo also enumerate this?
         self.adsorbed_surface_atoms = reasonable_adsorbed_surfaces[reasonable_adsorbed_surface_index]
         self.adsorbed_surface_sampling_str = str(reasonable_adsorbed_surface_index) + "/" + str(len(reasonable_adsorbed_surfaces))
 
@@ -174,13 +177,12 @@ class Combined(): # pass in one bulk at a time
     def get_adsorbed_bulk_dict(self):
         # all info should already be processed and stored. this just returns an organized dict
         ads_sampling_str = self.adsorbate.adsorbate_sampling_str + "_" + self.adsorbed_surface_sampling_str 
-        bulk_sampling_str = self.surface.elem_sampling_str + "_" + self.surface.bulk_sampling_str + "_" + self.surface.surface_sampling_str
 
         return {"adsorbed_bulk_atomsobject" : self.constrained_adsorbed_surface,
-                "adsorbed_bulk_metadata"    : (self.surface.mpid,
+                "adsorbed_bulk_metadata"    : (self.surface.bulk_object.mpid,
                                                self.surface.millers,
                                                round(self.surface.shift, 3),
                                                self.surface.top,
                                                self.adsorbate.smiles,
                                                self.sites),
-                "adsorbed_bulk_samplingstr" : bulk_sampling_str + "_" + ads_sampling_str}
+                "adsorbed_bulk_samplingstr" : self.surface.overall_sampling_str + "_" + ads_sampling_str}

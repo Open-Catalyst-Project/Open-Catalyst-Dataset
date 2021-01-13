@@ -8,10 +8,10 @@ Selects one (either specified or random), and stores info as an object
 '''
 
 class Adsorbate():
-    def __init__(self, adsorbate_database):
-        self.choose_adsorbate_pkl(adsorbate_database)
+    def __init__(self, adsorbate_database, specified_index=None):
+        self.choose_adsorbate_pkl(adsorbate_database, specified_index)
 
-    def choose_adsorbate_pkl(self, adsorbate_database):
+    def choose_adsorbate_pkl(self, adsorbate_database, specified_index=None):
         '''
         Chooses an adsorbate from our pkl based inverted index at random.
 
@@ -27,7 +27,11 @@ class Adsorbate():
         '''
         with open(adsorbate_database, 'rb') as f:
             inv_index = pickle.load(f)
-        element = np.random.choice(len(inv_index))
+
+        if specified_index:
+            element = specified_index
+        else:
+            element = np.random.choice(len(inv_index))
 
         self.adsorbate_sampling_str = str(element) + "/" + str(len(inv_index))
         self.atoms, self.smiles, self.bond_indices = inv_index[element]
