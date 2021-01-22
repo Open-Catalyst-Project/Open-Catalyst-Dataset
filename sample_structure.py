@@ -28,16 +28,6 @@ class StructureSampler():
 
         np.random.seed(self.args.seed)
 
-    def load_adsorbate(self):
-        '''
-        Sample a random adsorbate, or load the specified one,
-        and stores it in self.adsorbate
-        '''
-        if self.args.enumerate_all_structures: # can make this multiple indices in the future
-            self.adsorbate = Adsorbate(self.args.adsorbate_db, self.args.adsorbate_index)
-        else:
-            self.adsorbate = Adsorbate(self.args.adsorbate_db)
-
     def load_bulks(self):
         '''
         Loads bulk structures (one random or a list of specified ones)
@@ -68,6 +58,7 @@ class StructureSampler():
             else:
                 surface_info_index = np.random.choice(len(possible_surfaces))
                 surface = Surface(bulk, possible_surfaces[surface_info_index], surface_info_index, len(possible_surfaces))
+                self.adsorbate = Adsorbate(self.args.adsorbate_db)
                 self.combine_and_write(surface)
 
     def combine_and_write(self, surface, cur_bulk_index=None, cur_surface_index=None):
@@ -75,24 +66,36 @@ class StructureSampler():
         Add the adsorbate onto a given surface in a Combined object.
         Writes output files for the surface itself and the combined surface+adsorbate
         '''
-        combined = Combined(self.adsorbate, surface)
-
-        bulk_dict = surface.get_bulk_dict()
-        adsorbed_bulk_dict = combined.get_adsorbed_bulk_dict()
-
         if self.args.enumerate_all_structures:
             output_name_template = f'{self.args.adsorbate_index}_{cur_bulk_index}_surface{cur_surface_index}'
         else:
             output_name_template = f'random{self.args.seed}'
-        bulk_dir = os.path.join(self.args.output_dir, output_name_template, 'surface')
-        adsorbed_bulk_dir = os.path.join(self.args.output_dir, output_name_template, 'adsorbed_surface')
 
+        self.write_surface(surface, output_name_template)
+
+        combined = Combined(self.adsorbate, surface, self.args.enumerate_all_structures)
+        self.write_adsorbed_surface(combined, output_name_template)
+
+    def write_surface(self, surface, output_name_template):
+        # write files for just the surface
+        bulk_dict = surface.get_bulk_dict()
+        bulk_dir = os.path.join(self.args.output_dir, output_name_template, 'surface')
         write_vasp_input_files(bulk_dict['bulk_atomsobject'], bulk_dir)
-        write_vasp_input_files(adsorbed_bulk_dict['adsorbed_bulk_atomsobject'], adsorbed_bulk_dir)
         self.write_metadata_pkl(bulk_dict, os.path.join(bulk_dir, 'metadata.pkl'))
-        self.write_metadata_pkl(adsorbed_bulk_dict, os.path.join(adsorbed_bulk_dir, 'metadata.pkl'))
         self.logger.info(f"wrote surface ({bulk_dict['bulk_samplingstr']}) to {bulk_dir}")
-        self.logger.info(f"wrote adsorbed surface ({adsorbed_bulk_dict['adsorbed_bulk_samplingstr']}) to {adsorbed_bulk_dir}")
+
+    def write_adsorbed_surface(self, combined, output_name_template):
+        # write files for adsorbate placed on surface
+        self.logger.info(f'Writing {combined.num_configs} adslab configs')
+        for config_ind in range(combined.num_configs):
+            if self.args.enumerate_all_structures:
+                adsorbed_bulk_dir = os.path.join(self.args.output_dir, output_name_template, f'adslab_config{config_ind}')
+            else:
+                adsorbed_bulk_dir = os.path.join(self.args.output_dir, output_name_template, f'adslab')
+            adsorbed_bulk_dict = combined.get_adsorbed_bulk_dict(config_ind)
+            write_vasp_input_files(adsorbed_bulk_dict['adsorbed_bulk_atomsobject'], adsorbed_bulk_dir)
+            self.write_metadata_pkl(adsorbed_bulk_dict, os.path.join(adsorbed_bulk_dir, 'metadata.pkl'))
+            self.logger.info(f"wrote adsorbed surface ({adsorbed_bulk_dict['adsorbed_bulk_samplingstr']}) to {adsorbed_bulk_dir}")
 
     def write_metadata_pkl(self, dict_to_write, path):
         file_path = os.path.join(path, 'metadata.pkl')
@@ -103,7 +106,8 @@ class StructureSampler():
 
         start = time.time()
 
-        self.load_adsorbate()
+        if self.args.enumerate_all_structures:
+            self.adsorbate = Adsorbate(self.args.adsorbate_db, self.args.adsorbate_index)
         self.load_bulks()
         self.load_and_write_surfaces()
 

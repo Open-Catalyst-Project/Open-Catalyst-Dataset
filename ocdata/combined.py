@@ -17,17 +17,21 @@ Needs one adsorbate and one surface to create this class
 
 class Combined():
     # adds adsorbate to surface, does the constraining, and aggregates all data necessary to write out
-    def __init__(self, adsorbate, surface):
+    def __init__(self, adsorbate, surface, enumerate_all_configs):
         self.adsorbate = adsorbate
         self.surface = surface
+        self.enumerate_all_configs = enumerate_all_configs
 
         self.add_adsorbate_onto_surface(self.adsorbate.atoms, self.surface.surface_atoms, self.adsorbate.bond_indices)
 
-        # Add appropriate constraints
-        self.constrained_adsorbed_surface = constrain_surface(self.adsorbed_surface_atoms)
+        self.constrained_adsorbed_surfaces = []
+        self.all_sites = []
+        for atoms in self.adsorbed_surface_atoms:
+            # Add appropriate constraints
+            self.constrained_adsorbed_surfaces.append(constrain_surface(atoms))
 
-        # Do the hashing
-        self.sites = self.find_sites(self.surface.constrained_surface, self.constrained_adsorbed_surface, self.adsorbate.bond_indices)
+            # Do the hashing
+            self.all_sites.append(self.find_sites(self.surface.constrained_surface, self.constrained_adsorbed_surfaces[-1], self.adsorbate.bond_indices))
 
 
     def add_adsorbate_onto_surface(self, adsorbate, surface, bond_indices):
@@ -46,7 +50,7 @@ class Combined():
                                   surface. The bulk atoms will be tagged with `0`; the
                                   surface atoms will be tagged with `1`, and the the
                                   adsorbate atoms will be tagged with `2` or above.
-            adsorbed_surface_sampling_str    String specifying the sample, [index]/[total]
+            adsorbed_surface_sampling_strs    String specifying the sample, [index]/[total]
                                                 of reasonable adsorbed surfaces
         '''
         # convert surface atoms into graphic atoms object
@@ -74,9 +78,19 @@ class Combined():
         # Then pick one from the reasonable configurations list as an output.
         reasonable_adsorbed_surfaces = [surface for surface in adsorbed_surfaces
                                         if self.is_config_reasonable(surface)]
-        reasonable_adsorbed_surface_index = np.random.choice(len(reasonable_adsorbed_surfaces)) # todo also enumerate this?
-        self.adsorbed_surface_atoms = reasonable_adsorbed_surfaces[reasonable_adsorbed_surface_index]
-        self.adsorbed_surface_sampling_str = str(reasonable_adsorbed_surface_index) + "/" + str(len(reasonable_adsorbed_surfaces))
+
+        self.adsorbed_surface_atoms = []
+        self.adsorbed_surface_sampling_strs = []
+        if self.enumerate_all_configs:
+            self.num_configs = len(reasonable_adsorbed_surfaces)
+            for ind, reasonable_config in enumerate(reasonable_adsorbed_surfaces):
+                self.adsorbed_surface_atoms.append(reasonable_config)
+                self.adsorbed_surface_sampling_strs.append(str(ind) + '/' + str(len(reasonable_adsorbed_surfaces)))
+        else:
+            self.num_configs = 1
+            reasonable_adsorbed_surface_index = np.random.choice(len(reasonable_adsorbed_surfaces))
+            self.adsorbed_surface_atoms.append(reasonable_adsorbed_surfaces[reasonable_adsorbed_surface_index])
+            self.adsorbed_surface_sampling_strs.append(str(reasonable_adsorbed_surface_index) + '/' + str(len(reasonable_adsorbed_surfaces)))
 
     def convert_adsorbate_atoms_to_gratoms(self, adsorbate):
         """
@@ -174,15 +188,15 @@ class Combined():
 
         return tuple(sites)
 
-    def get_adsorbed_bulk_dict(self):
+    def get_adsorbed_bulk_dict(self, ind):
         # all info should already be processed and stored. this just returns an organized dict
-        ads_sampling_str = self.adsorbate.adsorbate_sampling_str + "_" + self.adsorbed_surface_sampling_str 
+        ads_sampling_str = self.adsorbate.adsorbate_sampling_str + "_" + self.adsorbed_surface_sampling_strs[ind]
 
-        return {"adsorbed_bulk_atomsobject" : self.constrained_adsorbed_surface,
+        return {"adsorbed_bulk_atomsobject" : self.constrained_adsorbed_surfaces[ind],
                 "adsorbed_bulk_metadata"    : (self.surface.bulk_object.mpid,
                                                self.surface.millers,
                                                round(self.surface.shift, 3),
                                                self.surface.top,
                                                self.adsorbate.smiles,
-                                               self.sites),
+                                               self.all_sites[ind]),
                 "adsorbed_bulk_samplingstr" : self.surface.overall_sampling_str + "_" + ads_sampling_str}
