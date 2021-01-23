@@ -67,7 +67,7 @@ class StructureSampler():
         Writes output files for the surface itself and the combined surface+adsorbate
         '''
         if self.args.enumerate_all_structures:
-            output_name_template = f'{self.args.adsorbate_index}_{cur_bulk_index}_surface{cur_surface_index}'
+            output_name_template = f'{self.args.adsorbate_index}_{cur_bulk_index}_{cur_surface_index}'
         else:
             output_name_template = f'random{self.args.seed}'
 
@@ -79,7 +79,7 @@ class StructureSampler():
     def write_surface(self, surface, output_name_template):
         # write files for just the surface
         bulk_dict = surface.get_bulk_dict()
-        bulk_dir = os.path.join(self.args.output_dir, output_name_template, 'surface')
+        bulk_dir = os.path.join(self.args.output_dir, output_name_template + '_surface')
         write_vasp_input_files(bulk_dict['bulk_atomsobject'], bulk_dir)
         self.write_metadata_pkl(bulk_dict, os.path.join(bulk_dir, 'metadata.pkl'))
         self.logger.info(f"wrote surface ({bulk_dict['bulk_samplingstr']}) to {bulk_dir}")
@@ -89,9 +89,9 @@ class StructureSampler():
         self.logger.info(f'Writing {combined.num_configs} adslab configs')
         for config_ind in range(combined.num_configs):
             if self.args.enumerate_all_structures:
-                adsorbed_bulk_dir = os.path.join(self.args.output_dir, output_name_template, f'adslab_config{config_ind}')
+                adsorbed_bulk_dir = os.path.join(self.args.output_dir, output_name_template + f'_adslab{config_ind}')
             else:
-                adsorbed_bulk_dir = os.path.join(self.args.output_dir, output_name_template, f'adslab')
+                adsorbed_bulk_dir = os.path.join(self.args.output_dir, output_name_template + '_adslab')
             adsorbed_bulk_dict = combined.get_adsorbed_bulk_dict(config_ind)
             write_vasp_input_files(adsorbed_bulk_dict['adsorbed_bulk_atomsobject'], adsorbed_bulk_dir)
             self.write_metadata_pkl(adsorbed_bulk_dict, os.path.join(adsorbed_bulk_dir, 'metadata.pkl'))
