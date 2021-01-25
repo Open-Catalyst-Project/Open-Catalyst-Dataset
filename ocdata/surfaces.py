@@ -12,10 +12,6 @@ from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.analysis.local_env import VoronoiNN
 from .constants import MIN_XY
 
-'''
-This class handles all things with a surface.
-Create one with a bulk and one of its selected surfaces
-'''
 
 def constrain_surface(atoms):
     '''
@@ -45,6 +41,10 @@ def constrain_surface(atoms):
 
 
 class Surface():
+    '''
+    This class handles all things with a surface.
+    Create one with a bulk and one of its selected surfaces
+    '''
     def __init__(self, bulk_object, surface_info, surface_index, total_surfaces_possible):
         self.bulk_object = bulk_object
         surface_struct, self.millers, self.shift, self.top = surface_info
@@ -217,6 +217,7 @@ class Surface():
         return tags
 
     def get_bulk_dict(self):
+        # returns an organized dict for writing to files. all info should already be processed and stored
         self.overall_sampling_str = self.bulk_object.elem_sampling_str + "_" + self.bulk_object.bulk_sampling_str + "_" + self.surface_sampling_str
         return { "bulk_atomsobject" : self.constrained_surface,
                  "bulk_metadata"    : (self.bulk_object.mpid,

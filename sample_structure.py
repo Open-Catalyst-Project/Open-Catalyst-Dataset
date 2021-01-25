@@ -15,6 +15,11 @@ import time
 
 
 class StructureSampler():
+    '''
+    Writes vasp input files for one of the following:
+    - one adsorbate/bulk/surface/config, based on a random seed
+    - one specified adsorbate, n specified bulks, and all possible surfaces and configs
+    '''
     def __init__(self, args, adsorbate_index=None, bulk_indices_list=None):
         # set up args, random seed, and logging
         self.args = args
@@ -159,6 +164,8 @@ def parse_args():
     return args
 
 def invert_mappings(args):
+    # takes two files that map index to mpid or smiles, and returns the inverse dict
+    # that maps mpid/smiles to bulk/adsorbate indices
     mpid_to_ind = {}
     with open(args.mpid_index_mapping, 'r') as f:
         lines = f.readlines()

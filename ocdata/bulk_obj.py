@@ -9,12 +9,12 @@ from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from .constants import MAX_MILLER
 
-'''
-This class handles all things with the bulk.
-It also provides possible surfaces, later used to create a Surface object.
-'''
 
 class Bulk():
+    '''
+    This class handles all things with the bulk.
+    It also provides possible surfaces, later used to create a Surface object.
+    '''
     def __init__(self, bulk_database, precomputed_structures=None, bulk_index=None):
         self.precomputed_structures = precomputed_structures
         self.choose_bulk_pkl(bulk_database, bulk_index)
@@ -34,7 +34,7 @@ class Bulk():
             bulk                        `ase.Atoms` of the chosen bulk structure.
             mpid                        A string indicating which MPID the bulk is
             index_in_flattened_array    Index of the chosen structure in the array
-            sampling_string             A string to enumerate the sampled structure todo
+            sampling_string             A string to enumerate the sampled structure
         '''
 
         try:
@@ -71,7 +71,7 @@ class Bulk():
         self.elem_sampling_str = str(self.n_elems) + "/" + str(len(inv_index))
         return bulk_index - counts_cumul[db_index]
 
-    def sample_n_elems(self, n_cat_elems_weights={1: 0.05, 2: 0.65, 3: 0.3}): # todo make these weights an input param?
+    def sample_n_elems(self, n_cat_elems_weights={1: 0.05, 2: 0.65, 3: 0.3}): # TODO make these weights an input param?
         '''
         Chooses the number of species we should look for in this sample.
 

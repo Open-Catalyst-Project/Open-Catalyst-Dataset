@@ -2,12 +2,12 @@
 import numpy as np
 import pickle
 
-'''
-This class handles all things with the adsorbate.
-Selects one (either specified or random), and stores info as an object
-'''
 
 class Adsorbate():
+    '''
+    This class handles all things with the adsorbate.
+    Selects one (either specified or random), and stores info as an object
+    '''
     def __init__(self, adsorbate_database, specified_index=None):
         self.choose_adsorbate_pkl(adsorbate_database, specified_index)
 

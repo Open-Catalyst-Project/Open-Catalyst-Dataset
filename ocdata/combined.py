@@ -10,14 +10,18 @@ from pymatgen.analysis.local_env import VoronoiNN
 from .constants import COVALENT_RADIUS
 from .surfaces import constrain_surface
 
-'''
-This class handles all things with the adsorbate placed on a surface
-Needs one adsorbate and one surface to create this class
-'''
 
 class Combined():
-    # adds adsorbate to surface, does the constraining, and aggregates all data necessary to write out
+    '''
+    This class handles all things with the adsorbate placed on a surface
+    Needs one adsorbate and one surface to create this class
+    '''
     def __init__(self, adsorbate, surface, enumerate_all_configs):
+        '''
+        Adds adsorbate to surface, does the constraining, and aggregates all data necessary to write out.
+        Can either pick a random configuration or store all possible ones.
+        '''
+
         self.adsorbate = adsorbate
         self.surface = surface
         self.enumerate_all_configs = enumerate_all_configs
@@ -189,7 +193,7 @@ class Combined():
         return tuple(sites)
 
     def get_adsorbed_bulk_dict(self, ind):
-        # all info should already be processed and stored. this just returns an organized dict
+        # returns an organized dict for writing to files. all info should already be processed and stored
         ads_sampling_str = self.adsorbate.adsorbate_sampling_str + "_" + self.adsorbed_surface_sampling_strs[ind]
 
         return {"adsorbed_bulk_atomsobject" : self.constrained_adsorbed_surfaces[ind],
