@@ -28,7 +28,7 @@ class Adsorbate():
         with open(adsorbate_database, 'rb') as f:
             inv_index = pickle.load(f)
 
-        if specified_index:
+        if specified_index is not None:
             element = specified_index
         else:
             element = np.random.choice(len(inv_index))

@@ -15,18 +15,34 @@ import time
 
 
 class StructureSampler():
-    def __init__(self, args):
-        # set up args, random seed, directories
+    def __init__(self, args, adsorbate_index=None, bulk_indices_list=None):
+        # set up args, random seed, and logging
         self.args = args
-        if self.args.bulk_indices:
-            self.bulk_indices_list = self.args.bulk_indices.split(',')
 
         self.logger = logging.getLogger()
         logging.basicConfig(format='[%(asctime)s] %(levelname)s: %(message)s',
             datefmt='%H:%M:%S')
         self.logger.setLevel(logging.INFO if self.args.verbose else logging.WARNING)
 
+        if adsorbate_index is not None and bulk_indices_list is not None:
+            self.adsorbate_index = adsorbate_index
+            self.bulk_indices_list = bulk_indices_list
+            self.logger.info(f'Enumerating all surfaces/configs for adsorbate {adsorbate_index} and bulks {bulk_indices_list}')
+        else:
+            self.logger.info('Sampling one random structure')
+
         np.random.seed(self.args.seed)
+
+    def run(self):
+        start = time.time()
+
+        if self.args.enumerate_all_structures:
+            self.adsorbate = Adsorbate(self.args.adsorbate_db, self.adsorbate_index)
+        self.load_bulks()
+        self.load_and_write_surfaces()
+
+        end = time.time()
+        print(f'Done! ({round(end - start, 2)}s)')
 
     def load_bulks(self):
         '''
@@ -67,7 +83,7 @@ class StructureSampler():
         Writes output files for the surface itself and the combined surface+adsorbate
         '''
         if self.args.enumerate_all_structures:
-            output_name_template = f'{self.args.adsorbate_index}_{cur_bulk_index}_{cur_surface_index}'
+            output_name_template = f'{self.adsorbate_index}_{cur_bulk_index}_{cur_surface_index}'
         else:
             output_name_template = f'random{self.args.seed}'
 
@@ -102,18 +118,6 @@ class StructureSampler():
         with open(path, 'wb') as f:
             pickle.dump(dict_to_write, f)
 
-    def run(self):
-
-        start = time.time()
-
-        if self.args.enumerate_all_structures:
-            self.adsorbate = Adsorbate(self.args.adsorbate_db, self.args.adsorbate_index)
-        self.load_bulks()
-        self.load_and_write_surfaces()
-
-        end = time.time()
-        print(f'Done! ({round(end - start, 2)}s)')
-
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Sample adsorbate and bulk surface(s)')
@@ -128,23 +132,68 @@ def parse_args():
     # for optimized (automatically try to use optimized if this is provided)
     parser.add_argument('--precomputed_structures', type=str, default=None, help='Root directory of precomputed structures')
 
-    # required args for enumerating all combinations:
+    # args for enumerating all combinations:
     parser.add_argument('--enumerate_all_structures', action='store_true', default=False,
         help='Find all possible structures given a specific adsorbate and a list of bulks')
     parser.add_argument('--adsorbate_index', type=int, default=None, help='adsorbate index (int)')
-    parser.add_argument('--bulk_indices', type=str, default=None, help='Comma separated list of bulk indices') # TODO change to file later
+    parser.add_argument('--bulk_indices', type=str, default=None, help='Comma separated list of bulk indices')
+
+    # read adsorbate and bulk indices from file:
+    parser.add_argument('--indices_file', type=str, default=None, help='Pickle containing tuples of (bulk, adsorbate) strings')
+    parser.add_argument('--adsorbate_index_mapping', type=str, default=None, help='Text file that maps index to adsorbate')
+    parser.add_argument('--mpid_index_mapping', type=str, default=None, help='Text file that maps index to mpid')
 
     parser.add_argument('--verbose', action='store_true', default=False, help='Log detailed info')
 
+    # check that all needed args are supplied
     args = parser.parse_args()
     if args.enumerate_all_structures:
-        if args.adsorbate_index is None or args.bulk_indices is None:
-            parser.error('Enumerating all structures requires adsorbate index and bulk indices file')
+        if args.indices_file:
+            if args.adsorbate_index_mapping is None or args.mpid_index_mapping is None:
+                parser.error('Must provide mapping of index to mpids and index to adsorbate strings')
+        elif args.adsorbate_index is None or args.bulk_indices is None:
+            parser.error('Enumerating all structures requires specified adsorbate and bulks')
+
     elif args.seed is None:
             parser.error('Seed is required when sampling one random structure')
     return args
 
+def invert_mappings(args):
+    mpid_to_ind = {}
+    with open(args.mpid_index_mapping, 'r') as f:
+        lines = f.readlines()
+        for line in lines:
+            elems = line.strip().split(' ')
+            assert len(elems) == 3
+            mpid_to_ind[elems[1]] = (int(elems[0]), elems[2])
+
+    smiles_to_ind = {}
+    with open(args.adsorbate_index_mapping, 'r') as f:
+        lines = f.readlines()
+        for line in lines:
+            elems = line.strip().split(' ')
+            assert len(elems) == 2
+            smiles_to_ind[elems[1]] = int(elems[0])
+
+    return mpid_to_ind, smiles_to_ind
+
 if __name__ == '__main__':
     args = parse_args()
-    job = StructureSampler(args)
-    job.run()
+
+    if args.indices_file:
+        # enumerate all structures for all given (adsorbate, bulk) tuples
+        mpid_to_ind, smiles_to_ind = invert_mappings(args)
+        with open(args.indices_file, 'rb') as f:
+            pairs = pickle.load(f)
+        for mpid, smiles in pairs:
+            job = StructureSampler(args, smiles_to_ind[smiles], [mpid_to_ind[mpid][0]])
+            job.run()
+
+    elif args.enumerate_all_structures:
+        # enumerate all structures for one adsorbate and a list of bulks
+        job = StructureSampler(args, args.adsorbate_index, args.bulk_indices.split(','))
+        job.run()
+    else:
+        # sample one random adsorbate, bulk, surface, and config
+        job = StructureSampler(args)
+        job.run()

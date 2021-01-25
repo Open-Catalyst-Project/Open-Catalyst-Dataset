@@ -38,7 +38,7 @@ class Bulk():
         '''
 
         try:
-            if bulk_index:
+            if bulk_index is not None:
                 row_bulk_index = self.find_n_elems_and_index(inv_index, bulk_index)
             else:
                 self.sample_n_elems()
