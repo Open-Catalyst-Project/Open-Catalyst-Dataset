@@ -19,6 +19,13 @@ class StructureSampler():
     Writes vasp input files for one of the following:
     - one adsorbate/bulk/surface/config, based on a random seed
     - one specified adsorbate, n specified bulks, and all possible surfaces and configs
+
+    The output directory structure will look like the following: for sampling a random structure,
+    the directories will be `random{seed}_surface` and `random{seed}_adslab` for the surface alone
+    and the adsorbate+surface, respectively. For enumerating all structures, the directories will be
+    `{adsorbate}_{bulk}_{surface}_surface` and `{adsorbate}_{bulk}_{surface}_adslab{config}`, where
+    everything in braces are the respective indices.
+
     '''
     def __init__(self, args, adsorbate_index=None, bulk_indices_list=None):
         # set up args, random seed, and logging
