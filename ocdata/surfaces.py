@@ -55,6 +55,9 @@ class Surface():
         self.tag_surface_atoms(self.bulk_object.bulk_atoms, self.surface_atoms)
         self.constrained_surface = constrain_surface(self.surface_atoms)
 
+        # verify that the bulk and surface elements match:
+        assert set(bulk_object.bulk_atoms.symbols) == set(self.surface_atoms.symbols)
+
     def tile_atoms(self, atoms): # todo style wise: better to put inside or outside of class?
         '''
         This function will repeat an atoms structure in the x and y direction until
