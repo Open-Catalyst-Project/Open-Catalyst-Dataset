@@ -41,8 +41,7 @@ class StructureSampler():
             self.logger.info(f'Enumerating all surfaces/configs for adsorbate {self.args.adsorbate_index} and bulks {self.bulk_indices_list}')
         else:
             self.logger.info('Sampling one random structure')
-
-        np.random.seed(self.args.seed)
+            np.random.seed(self.args.seed)
 
     def run(self):
         start = time.time()
@@ -62,13 +61,13 @@ class StructureSampler():
         '''
         self.all_bulks = []
         with open(self.args.bulk_db, 'rb') as f:
-            inv_index = pickle.load(f)
+            bulk_db_lookup = pickle.load(f)
 
         if self.args.enumerate_all_structures:
             for ind in self.bulk_indices_list:
-                self.all_bulks.append(Bulk(inv_index, self.args.precomputed_structures, ind))
+                self.all_bulks.append(Bulk(bulk_db_lookup, self.args.precomputed_structures, ind))
         else:
-            self.all_bulks.append(Bulk(inv_index, self.args.precomputed_structures))
+            self.all_bulks.append(Bulk(bulk_db_lookup, self.args.precomputed_structures))
 
     def load_and_write_surfaces(self):
         '''
@@ -146,7 +145,7 @@ def parse_args():
     # input and output
     parser.add_argument('--bulk_db', type=str, required=True, help='Underlying db for bulks')
     parser.add_argument('--adsorbate_db', type=str, required=True, help='Underlying db for adsorbates')
-    parser.add_argument('--output_dir', type=str, required=True, help='Output dir path')
+    parser.add_argument('--output_dir', type=str, required=True, help='Root directory for outputs')
 
     # for optimized (automatically try to use optimized if this is provided)
     parser.add_argument('--precomputed_structures', type=str, default=None, help='Root directory of precomputed structures')
@@ -154,9 +153,9 @@ def parse_args():
     # args for enumerating all combinations:
     parser.add_argument('--enumerate_all_structures', action='store_true', default=False,
         help='Find all possible structures given a specific adsorbate and a list of bulks')
-    parser.add_argument('--adsorbate_index', type=int, default=None, help='adsorbate index (int)')
+    parser.add_argument('--adsorbate_index', type=int, default=None, help='Adsorbate index (int)')
     parser.add_argument('--bulk_indices', type=str, default=None, help='Comma separated list of bulk indices')
-    parser.add_argument('--surface_index', type=int, default=None, help='optional surface index (int)')
+    parser.add_argument('--surface_index', type=int, default=None, help='Optional surface index (int)')
 
     parser.add_argument('--verbose', action='store_true', default=False, help='Log detailed info')
 

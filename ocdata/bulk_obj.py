@@ -19,14 +19,13 @@ class Bulk():
         self.precomputed_structures = precomputed_structures
         self.choose_bulk_pkl(bulk_database, bulk_index, max_elems)
 
-    def choose_bulk_pkl(self, inv_index, bulk_index, max_elems):
+    def choose_bulk_pkl(self, bulk_db, bulk_index, max_elems):
         '''
         Chooses a bulk from our pkl file at random as long as the bulk contains
         the specified number of elements in any composition.
 
         Args:
-            bulk_database   A string pointing to the pkl file that contains
-                            the bulks you want to consider.
+            bulk_db         Unpickled dict or list of bulks
             n_elems         An integer indicating how many elements should be
                             inside the bulk to be selected.
 
@@ -39,22 +38,22 @@ class Bulk():
 
         try:
             if bulk_index is not None:
-                assert len(inv_index) > 3, f'Bulk db only has {len(inv_index)} entries. Did you pass in the correct bulk database?'
-                assert isinstance(inv_index[bulk_index], tuple)
+                assert len(bulk_db) > 3, f'Bulk db only has {len(bulk_db)} entries. Did you pass in the correct bulk database?'
+                assert isinstance(bulk_db[bulk_index], tuple)
 
-                self.bulk_atoms, self.mpid, self.bulk_sampling_str, self.index_of_bulk_atoms = inv_index[bulk_index]
+                self.bulk_atoms, self.mpid, self.bulk_sampling_str, self.index_of_bulk_atoms = bulk_db[bulk_index]
                 self.n_elems = len(set(self.bulk_atoms.symbols)) # 1, 2, or 3
                 self.elem_sampling_str = f'{self.n_elems}/{max_elems}'
 
             else:
                 self.sample_n_elems()
-                assert isinstance(inv_index, dict), 'Did you pass in the correct bulk database?'
-                assert self.n_elems in inv_index.keys(), f'Bulk db does not have bulks of {self.n_elems} elements'
-                assert isinstance(inv_index[self.n_elems], list), 'Did you pass in the correct bulk database?'
+                assert isinstance(bulk_db, dict), 'Did you pass in the correct bulk database?'
+                assert self.n_elems in bulk_db.keys(), f'Bulk db does not have bulks of {self.n_elems} elements'
+                assert isinstance(bulk_db[self.n_elems], list), 'Did you pass in the correct bulk database?'
 
-                total_elements_for_key = len(inv_index[self.n_elems])
+                total_elements_for_key = len(bulk_db[self.n_elems])
                 row_bulk_index = np.random.choice(total_elements_for_key)
-                self.bulk_atoms, self.mpid, self.bulk_sampling_str, self.index_of_bulk_atoms = inv_index[self.n_elems][row_bulk_index]
+                self.bulk_atoms, self.mpid, self.bulk_sampling_str, self.index_of_bulk_atoms = bulk_db[self.n_elems][row_bulk_index]
 
         except IndexError:
             raise ValueError('Randomly chose to look for a %i-component material, '
@@ -62,24 +61,6 @@ class Bulk():
                              'to the database or change the weights to exclude '
                              'this number of components.'
                              % self.n_elems)
-
-    def find_n_elems_and_index(self, inv_index, bulk_index): ##### DEPRECATED, will remove #####
-        '''
-        Given the index of flattened inv_index, finds the n_elem and non-flattened index.
-        For example, if there are 100 bulks each of 1, 2, 3 elements, a bulk_index of 150
-        would obtain self.n_elems = 2 and returns row_bulk_index = 50
-
-        Sets n_elems and elem_sampling_str; returns row_bulk_index
-        '''
-        sorted_keys = sorted(inv_index.keys())
-        counts_cumul = np.cumsum([len(inv_index[key]) for key in sorted_keys])
-        assert bulk_index >= 0 and bulk_index < counts_cumul[-1], \
-            f'bulk index must be between 0 and {counts_cumul[-1] - 1} inclusive'
-
-        db_index = np.searchsorted(counts_cumul, bulk_index, side='right') # 0, 1, or 2
-        self.n_elems = sorted_keys[db_index] # 1, 2, or 3
-        self.elem_sampling_str = str(self.n_elems) + "/" + str(len(inv_index))
-        return bulk_index - counts_cumul[db_index]
 
     def sample_n_elems(self, n_cat_elems_weights={1: 0.05, 2: 0.65, 3: 0.3}): # TODO make these weights an input param?
         '''
