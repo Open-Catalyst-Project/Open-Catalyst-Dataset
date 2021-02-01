@@ -78,6 +78,7 @@ class StructureSampler():
             possible_surfaces = bulk.get_possible_surfaces()
             if self.args.enumerate_all_structures:
                 if self.args.surface_index is not None:
+                    assert 0 <= self.args.surface_index < len(possible_surfaces), 'Invalid surface index provided'
                     self.logger.info(f'Loading only surface {self.args.surface_index} for bulk {self.bulk_indices_list[bulk_ind]}')
                     included_surface_indices = [self.args.surface_index]
                 else:
@@ -93,6 +94,7 @@ class StructureSampler():
                 surface = Surface(bulk, possible_surfaces[surface_info_index], surface_info_index, len(possible_surfaces))
                 self.adsorbate = Adsorbate(self.args.adsorbate_db)
                 self.combine_and_write(surface)
+
 
     def combine_and_write(self, surface, cur_bulk_index=None, cur_surface_index=None):
         '''

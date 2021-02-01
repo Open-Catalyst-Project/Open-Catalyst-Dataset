@@ -26,19 +26,20 @@ class Bulk():
 
         Args:
             bulk_db         Unpickled dict or list of bulks
-            n_elems         An integer indicating how many elements should be
-                            inside the bulk to be selected.
+            bulk_index      Index of which bulk to select. If None, randomly sample one.
+            max_elems       Max elems for any bulk structure. Currently it is 3 by default.
 
-        Sets:
-            bulk                        `ase.Atoms` of the chosen bulk structure.
+        Sets as class variables:
+            bulk_atoms                  `ase.Atoms` of the chosen bulk structure.
             mpid                        A string indicating which MPID the bulk is
-            index_in_flattened_array    Index of the chosen structure in the array
-            sampling_string             A string to enumerate the sampled structure
+            bulk_sampling_str           A string to enumerate the sampled structure
+            index_of_bulk_atoms         Index of the chosen bulk in the array (should match
+                                        bulk_index if provided)
         '''
 
         try:
             if bulk_index is not None:
-                assert len(bulk_db) > 3, f'Bulk db only has {len(bulk_db)} entries. Did you pass in the correct bulk database?'
+                assert len(bulk_db) > max_elems, f'Bulk db only has {len(bulk_db)} entries. Did you pass in the correct bulk database?'
                 assert isinstance(bulk_db[bulk_index], tuple)
 
                 self.bulk_atoms, self.mpid, self.bulk_sampling_str, self.index_of_bulk_atoms = bulk_db[bulk_index]
