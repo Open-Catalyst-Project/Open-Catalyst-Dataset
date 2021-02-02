@@ -25,7 +25,7 @@ def parse_args():
     args = parser.parse_args()
     return args
 
-def get_possible_surfaces(bulk_ind, bulk_by_ind, precomputed_structures, mpid):
+def count_possible_surfaces(bulk_ind, bulk_by_ind, precomputed_structures, mpid):
     # given a bulk id (int), return the number of possible surfaces (int)
     # also verifies that the mpid is matching in bulk_db
     bulk = Bulk(bulk_by_ind, precomputed_structures, bulk_ind)
@@ -47,7 +47,7 @@ if __name__ == '__main__':
     for structure_tuple in all_inputs:
         assert len(structure_tuple) == 2
         mpid, smiles = structure_tuple
-        num_surfaces = get_possible_surfaces(mpid_to_ind[mpid], bulk_by_ind, args.precomputed_structures, mpid)
+        num_surfaces = count_possible_surfaces(mpid_to_ind[mpid], bulk_by_ind, args.precomputed_structures, mpid)
         print(f'found {num_surfaces} possible surfaces for {mpid}, {smiles}')
         for ind in range(num_surfaces):
             all_outputs.append((mpid, smiles, ind))

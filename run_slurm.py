@@ -47,7 +47,7 @@ def run_sample_structure(args, adsorbate, bulk, surface):
     job = StructureSampler(args)
     job.run()
 
-if __name__ == '__main__':
+def main():
     args = parse_args()
 
     # get mappings from string -> int
@@ -61,8 +61,11 @@ if __name__ == '__main__':
 
     if args.file_row_index is not None:
         all_structures = [all_structures[args.file_row_index]]
-        printf(f'Only running line {args.file_row_index}')
+        print(f'Only running line {args.file_row_index}')
 
     for structure_tuple in all_structures:
         mpid, smiles, surface_ind = structure_tuple
         run_sample_structure(args, smiles_to_ind[smiles], mpid_to_ind[mpid], surface_ind)
+
+if __name__ == '__main__':
+    main()
