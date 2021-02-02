@@ -61,11 +61,12 @@ def main():
 
     if args.file_row_index is not None:
         all_structures = [all_structures[args.file_row_index]]
-        print(f'Only running line {args.file_row_index}')
+        print(f'Only running line {args.file_row_index} ({all_structures})')
 
     for structure_tuple in all_structures:
         mpid, smiles, surface_ind = structure_tuple
         run_sample_structure(args, smiles_to_ind[smiles], mpid_to_ind[mpid], surface_ind)
+        print(f'Done running line {args.file_row_index} ({all_structures})')
 
 if __name__ == '__main__':
     main()
