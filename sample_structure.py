@@ -21,10 +21,10 @@ class StructureSampler():
     - one specified adsorbate, n specified bulks, one specified surface, and all possible configs
 
     The output directory structure will look like the following:
-    - For sampling a random structure, the directories will be `random{seed}_surface` and
-        `random{seed}_adslab` for the surface alone and the adsorbate+surface, respectively.
-    - For enumerating all structures, the directories will be `{adsorbate}_{bulk}_{surface}_surface`
-        and `{adsorbate}_{bulk}_{surface}_adslab{config}`, where everything in braces are the
+    - For sampling a random structure, the directories will be `random{seed}/surface` and
+        `random{seed}/adslab` for the surface alone and the adsorbate+surface, respectively.
+    - For enumerating all structures, the directories will be `{adsorbate}_{bulk}_{surface}/surface`
+        and `{adsorbate}_{bulk}_{surface}/adslab{config}`, where everything in braces are the
         respective indices.
 
     '''
@@ -53,7 +53,7 @@ class StructureSampler():
         self.load_and_write_surfaces()
 
         end = time.time()
-        print(f'Done! ({round(end - start, 2)}s)')
+        self.logger.info(f'Done! ({round(end - start, 2)}s)')
 
     def load_bulks(self):
         '''
@@ -115,7 +115,7 @@ class StructureSampler():
     def write_surface(self, surface, output_name_template):
         # write files for just the surface
         bulk_dict = surface.get_bulk_dict()
-        bulk_dir = os.path.join(self.args.output_dir, output_name_template + '_surface')
+        bulk_dir = os.path.join(self.args.output_dir, output_name_template, 'surface')
         write_vasp_input_files(bulk_dict['bulk_atomsobject'], bulk_dir)
         self.write_metadata_pkl(bulk_dict, os.path.join(bulk_dir, 'metadata.pkl'))
         self.logger.info(f"wrote surface ({bulk_dict['bulk_samplingstr']}) to {bulk_dir}")
@@ -125,9 +125,9 @@ class StructureSampler():
         self.logger.info(f'Writing {combined.num_configs} adslab configs')
         for config_ind in range(combined.num_configs):
             if self.args.enumerate_all_structures:
-                adsorbed_bulk_dir = os.path.join(self.args.output_dir, output_name_template + f'_adslab{config_ind}')
+                adsorbed_bulk_dir = os.path.join(self.args.output_dir, output_name_template, f'adslab{config_ind}')
             else:
-                adsorbed_bulk_dir = os.path.join(self.args.output_dir, output_name_template + '_adslab')
+                adsorbed_bulk_dir = os.path.join(self.args.output_dir, output_name_template, 'adslab')
             adsorbed_bulk_dict = combined.get_adsorbed_bulk_dict(config_ind)
             write_vasp_input_files(adsorbed_bulk_dict['adsorbed_bulk_atomsobject'], adsorbed_bulk_dir)
             self.write_metadata_pkl(adsorbed_bulk_dict, os.path.join(adsorbed_bulk_dir, 'metadata.pkl'))

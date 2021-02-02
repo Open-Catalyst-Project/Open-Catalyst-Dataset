@@ -36,8 +36,6 @@ def invert_mappings(filename, expected_elems):
     return str_to_ind
 
 def run_sample_structure(args, adsorbate, bulk, surface):
-    print(f'Running sample_structure.py for adsorbate {adsorbate}, bulk {bulk}, surface {surface}')
-
     # manually set some args
     args.enumerate_all_structures = True
     args.adsorbate_index = adsorbate
@@ -46,6 +44,7 @@ def run_sample_structure(args, adsorbate, bulk, surface):
 
     job = StructureSampler(args)
     job.run()
+    print(f'Done running sample_structure.py for {adsorbate}_{bulk}_{surface}')
 
 def main():
     args = parse_args()
@@ -57,16 +56,15 @@ def main():
     with open(args.indices_file, 'rb') as f:
         all_structures = pickle.load(f)
 
-    print(f'Found: {len(all_structures)} structures in file')
+    # print(f'Found: {len(all_structures)} structures in file')
 
     if args.file_row_index is not None:
         all_structures = [all_structures[args.file_row_index]]
-        print(f'Only running line {args.file_row_index} ({all_structures})')
+        print(f'Running line {args.file_row_index} ({all_structures})')
 
     for structure_tuple in all_structures:
         mpid, smiles, surface_ind = structure_tuple
         run_sample_structure(args, smiles_to_ind[smiles], mpid_to_ind[mpid], surface_ind)
-        print(f'Done running line {args.file_row_index} ({all_structures})')
 
 if __name__ == '__main__':
     main()
