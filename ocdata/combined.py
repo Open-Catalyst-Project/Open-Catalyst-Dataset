@@ -158,7 +158,11 @@ class Combined():
             # Then, check the covalent radius between each adsorbate atoms
             # and its nearest neighbors that are slab atoms
             # to make sure adsorbate is not buried into the surface
-            nearneighbors = vnn.get_nn_info(structure, n=idx)
+            try:
+                nearneighbors = vnn.get_nn_info(structure, n=idx)
+            except ValueError:
+                return False
+
             slab_nn = [nn for nn in nearneighbors if nn['site_index'] not in adsorbate_indices]
             for nn in slab_nn:
                 ads_elem = structure[idx].species_string

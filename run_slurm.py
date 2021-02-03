@@ -56,8 +56,6 @@ def main():
     with open(args.indices_file, 'rb') as f:
         all_structures = pickle.load(f)
 
-    # print(f'Found: {len(all_structures)} structures in file')
-
     if args.file_row_index is not None:
         all_structures = [all_structures[args.file_row_index]]
         print(f'Running line {args.file_row_index} ({all_structures})')

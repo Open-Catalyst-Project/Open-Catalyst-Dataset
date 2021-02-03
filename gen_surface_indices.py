@@ -40,17 +40,28 @@ if __name__ == '__main__':
     with open(args.indices_file, 'rb') as f:
         all_inputs = pickle.load(f) # list of (mpid, smiles) tuples
 
+    print(f'found {len(all_inputs)} inputs')
+
     all_outputs = [] # list of (mpid, smiles, surface index) tuples
     with open(args.bulk_db, 'rb') as f:
         bulk_by_ind = pickle.load(f)
 
+    surfs_per_adbulk = {}
+    total_written = 0
     for structure_tuple in all_inputs:
         assert len(structure_tuple) == 2
         mpid, smiles = structure_tuple
-        num_surfaces = count_possible_surfaces(mpid_to_ind[mpid], bulk_by_ind, args.precomputed_structures, mpid)
-        print(f'found {num_surfaces} possible surfaces for {mpid}, {smiles}')
-        for ind in range(num_surfaces):
-            all_outputs.append((mpid, smiles, ind))
+
+        if (mpid, smiles) not in surfs_per_adbulk:
+            num_surfaces = count_possible_surfaces(mpid_to_ind[mpid], bulk_by_ind, args.precomputed_structures, mpid)
+            # print(f'found {num_surfaces} possible surfaces for {mpid}, {smiles}')
+            surfs_per_adbulk[(mpid, smiles)] = num_surfaces
+            total_written += num_surfaces
+            for ind in range(num_surfaces):
+                all_outputs.append((mpid, smiles, ind))
+
+    print(f'Found {len(surfs_per_adbulk)} unique (mpid, smiles) pairs')
+    print(f'Wrote {total_written} (mpid, smiles, surface_indx) sets')
 
     with open(args.output_file, 'wb') as outf:
         pickle.dump(all_outputs, outf)
