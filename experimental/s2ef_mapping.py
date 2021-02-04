@@ -38,12 +38,14 @@ def get_mapping(randomid):
         new_images = read_new(randomid)
         new_pos = [image.get_positions() for image in new_images]
 
+        visited = [False] * len(new_pos)
         dict_mapping = {}
         # maps old frame idx -> new frame idx
-        for old_idx, pos in enumerate(old_pos):
+        for old_idx, pos_1 in enumerate(old_pos):
             for new_idx, pos_2 in enumerate(new_pos):
-                if (pos == pos_2).all():
+                if not visited[new_idx] and np.array_equal(pos_1, pos_2):
                     dict_mapping[old_idx] = new_idx
+                    visited[new_idx] = True
                     break
         assert len(set(dict_mapping.keys())) == len(set(dict_mapping.values()))
     except Exception:
