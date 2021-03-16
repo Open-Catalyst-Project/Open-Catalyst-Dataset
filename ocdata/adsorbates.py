@@ -16,8 +16,9 @@ class Adsorbate():
         Chooses an adsorbate from our pkl based inverted index at random.
 
         Args:
-            adsorbate_database   A string pointing to the a pkl file that contains
-                                 an inverted index over different adsorbates.
+            adsorbate_database: A string pointing to the a pkl file that contains
+                                an inverted index over different adsorbates.
+            specified_index: adsorbate index to choose instead of choosing a random one
         Sets:
             atoms                    `ase.Atoms` object of the adsorbate
             smiles                   SMILES-formatted representation of the adsorbate
