@@ -14,14 +14,28 @@ from .surfaces import constrain_surface
 class Combined():
     '''
     This class handles all things with the adsorbate placed on a surface
-    Needs one adsorbate and one surface to create this class
+    Needs one adsorbate and one surface to create this class.
+
+    Class variables:
+        adsorbate: `Adsorbate` object
+        surface: `Surface` object
+        enumerate_all_configs: whether to enumerate all adslab placements instead of choosing one random
+        adsorbed_surface_atoms: list of `Atoms` objects containing both the adsorbate and surface
+                                for all placements (or one random placement)
+        adsorbed_surface_sampling_strs: list of strings capturing the config index for each adslab placement
+        constrained_adsorbed_surfaces: list of all constrained adslab Atoms
+        all_sites: list of binding coordinates for all the adslab configs
     '''
     def __init__(self, adsorbate, surface, enumerate_all_configs):
         '''
         Adds adsorbate to surface, does the constraining, and aggregates all data necessary to write out.
         Can either pick a random configuration or store all possible ones.
-        '''
 
+        Args:
+            adsorbate: the `Adsorbate` object
+            surface: the `Surface` object
+            enumerate_all_configs: whether to enumerate all adslab placements instead of choosing one random
+        '''
         self.adsorbate = adsorbate
         self.surface = surface
         self.enumerate_all_configs = enumerate_all_configs
@@ -45,17 +59,17 @@ class Combined():
         you.
 
         Args:
-            adsorbate       An `ase.Atoms` object of the adsorbate
-            surface         An `ase.Atoms` object of the surface
-            bond_indices          A list of integers indicating the indices of the
-                                  binding atoms of the adsorbate
+            adsorbate: An `ase.Atoms` object of the adsorbate
+            surface: An `ase.Atoms` object of the surface
+            bond_indices: A list of integers indicating the indices of the
+                          binding atoms of the adsorbate
         Sets these values:
-            adsorbed_surface_atoms      An `ase graphic Atoms` object containing the adsorbate and
-                                  surface. The bulk atoms will be tagged with `0`; the
-                                  surface atoms will be tagged with `1`, and the the
-                                  adsorbate atoms will be tagged with `2` or above.
-            adsorbed_surface_sampling_strs    String specifying the sample, [index]/[total]
-                                                of reasonable adsorbed surfaces
+            adsorbed_surface_atoms: An `ase graphic Atoms` object containing the adsorbate and
+                                    surface. The bulk atoms will be tagged with `0`; the
+                                    surface atoms will be tagged with `1`, and the the
+                                    adsorbate atoms will be tagged with `2` or above.
+            adsorbed_surface_sampling_strs: String specifying the sample, [index]/[total]
+                                            of reasonable adsorbed surfaces
         '''
         # convert surface atoms into graphic atoms object
         surface_gratoms = catkit.Gratoms(surface)
@@ -212,7 +226,10 @@ class Combined():
         return tuple(sites)
 
     def get_adsorbed_bulk_dict(self, ind):
-        # returns an organized dict for writing to files. all info should already be processed and stored
+        '''
+        Returns an organized dict for writing to files.
+        All info is already processed and stored in class variables.
+        '''
         ads_sampling_str = self.adsorbate.adsorbate_sampling_str + "_" + self.adsorbed_surface_sampling_strs[ind]
 
         return {"adsorbed_bulk_atomsobject" : self.constrained_adsorbed_surfaces[ind],
