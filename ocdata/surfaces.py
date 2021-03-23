@@ -245,11 +245,11 @@ class Surface():
         Returns an organized dict for writing to files.
         All info is already processed and stored in class variables.
         '''
-        overall_sampling_str = self.bulk_object.elem_sampling_str + "_" + \
+        self.overall_sampling_str = self.bulk_object.elem_sampling_str + "_" + \
             self.bulk_object.bulk_sampling_str + "_" + self.surface_sampling_str
         return { "bulk_atomsobject" : self.constrained_surface,
                  "bulk_metadata"    : (self.bulk_object.mpid,
                                        self.millers,
                                        round(self.shift, 3),
                                        self.top),
-                 "bulk_samplingstr" : overall_sampling_str}
+                 "bulk_samplingstr" : self.overall_sampling_str}
