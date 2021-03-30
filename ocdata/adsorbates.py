@@ -7,7 +7,19 @@ class Adsorbate():
     '''
     This class handles all things with the adsorbate.
     Selects one (either specified or random), and stores info as an object
+
+    Attributes
+    ----------
+    atoms : Atoms
+        actual atoms of the adsorbate
+    smiles : str
+        SMILES representation of the adsorbate
+    bond_indices : list
+        indices of the atoms meant to be bonded to the surface
+    adsorbate_sampling_str : str
+        string capturing the adsorbate index and total possible adsorbates
     '''
+
     def __init__(self, adsorbate_database, specified_index=None):
         self.choose_adsorbate_pkl(adsorbate_database, specified_index)
 

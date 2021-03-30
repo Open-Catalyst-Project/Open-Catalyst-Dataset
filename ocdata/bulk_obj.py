@@ -15,15 +15,29 @@ class Bulk():
     This class handles all things with the bulk.
     It also provides possible surfaces, later used to create a Surface object.
 
-    Class variables:
-        precomputed_structures: root dir of precomputed structures
-        bulk_atoms: Atoms object of bulk
-        mpid: mpid of bulk
-        bulk_sampling_str: string capturing the bulk index and number of possible bulks
-        index_of_bulk_atoms: index of bulk in the db
-        n_elems: number of elements of the bulk
-        elem_sampling_str: string capturing n_elems and the max possible elements
+    Attributes
+    ----------
+    precomputed_structures : str
+        root dir of precomputed structures
+    bulk_atoms : Atoms
+        actual atoms of the bulk
+    mpid : str
+        mpid of the bulk
+    bulk_sampling_str : str
+        string capturing the bulk index and number of possible bulks
+    index_of_bulk_atoms : int
+        index of bulk in the db
+    n_elems : int
+        number of elements of the bulk
+    elem_sampling_str : str
+        string capturing n_elems and the max possible elements
+
+    Public methods
+    --------------
+    get_possible_surfaces()
+        returns a list of possible surfaces for this bulk instance
     '''
+
     def __init__(self, bulk_database, precomputed_structures=None, bulk_index=None, max_elems=3):
         '''
         Initializes the object by choosing or sampling from the bulk database
@@ -48,7 +62,7 @@ class Bulk():
             bulk_index      Index of which bulk to select. If None, randomly sample one.
             max_elems       Max elems for any bulk structure. Currently it is 3 by default.
 
-        Sets as class variables:
+        Sets as class attributes:
             bulk_atoms                  `ase.Atoms` of the chosen bulk structure.
             mpid                        A string indicating which MPID the bulk is
             bulk_sampling_str           A string to enumerate the sampled structure

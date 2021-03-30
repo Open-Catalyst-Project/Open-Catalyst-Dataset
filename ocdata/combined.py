@@ -16,16 +16,29 @@ class Combined():
     This class handles all things with the adsorbate placed on a surface
     Needs one adsorbate and one surface to create this class.
 
-    Class variables:
-        adsorbate: `Adsorbate` object
-        surface: `Surface` object
-        enumerate_all_configs: whether to enumerate all adslab placements instead of choosing one random
-        adsorbed_surface_atoms: list of `Atoms` objects containing both the adsorbate and surface
-                                for all placements (or one random placement)
-        adsorbed_surface_sampling_strs: list of strings capturing the config index for each adslab placement
-        constrained_adsorbed_surfaces: list of all constrained adslab Atoms
-        all_sites: list of binding coordinates for all the adslab configs
+    Attributes
+    ----------
+    adsorbate : Adsorbate
+        object representing the adsorbate
+    surface : Surface
+        object representing the surface
+    enumerate_all_configs : boolean
+        whether to enumerate all adslab placements instead of choosing one random
+    adsorbed_surface_atoms : list
+        `Atoms` objects containing both the adsorbate and surface for all desired placements
+    adsorbed_surface_sampling_strs : list
+        list of strings capturing the config index for each adslab placement
+    constrained_adsorbed_surfaces : list
+        list of all constrained adslab atoms
+    all_sites : list
+        list of binding coordinates for all the adslab configs
+
+    Public methods
+    --------------
+    get_adsorbed_bulk_dict(ind)
+        returns a dict of info for the adsorbate+surface of the specified config index
     '''
+
     def __init__(self, adsorbate, surface, enumerate_all_configs):
         '''
         Adds adsorbate to surface, does the constraining, and aggregates all data necessary to write out.

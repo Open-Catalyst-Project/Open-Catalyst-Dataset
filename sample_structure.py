@@ -15,7 +15,8 @@ import time
 
 class StructureSampler():
     '''
-    Writes vasp input files for one of the following options:
+    A class that creates adsorbate/bulk/surface objects and
+    writes vasp input files for one of the following options:
     - one random adsorbate/bulk/surface/config, based on a specified random seed
     - one specified adsorbate, n specified bulks, and all possible surfaces and configs
     - one specified adsorbate, n specified bulks, one specified surface, and all possible configs
@@ -27,7 +28,25 @@ class StructureSampler():
         and `{adsorbate}_{bulk}_{surface}/adslab{config}`, where everything in braces are the
         respective indices.
 
+    Attributes
+    ----------
+    args : argparse.Namespace
+        contains all command line args
+    logger : logging.RootLogger
+        logging class to print info
+    adsorbate : Adsorbate
+        the selected adsorbate object
+    all_bulks : list
+        list of `Bulk` objects
+    bulk_indices_list : list
+        list of specified bulk indices (ints) that we want to select
+
+    Public methods
+    --------------
+    run()
+        selects the appropriate materials and writes to files
     '''
+
     def __init__(self, args):
         '''
         Set up args from argparse, random seed, and logging.

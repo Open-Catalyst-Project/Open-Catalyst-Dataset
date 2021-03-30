@@ -48,13 +48,29 @@ class Surface():
     This class handles all things with a surface.
     Create one with a bulk and one of its selected surfaces
 
-    Class variables:
-        bulk_object: Bulk object that the surface comes from
-        surface_sampling_str: string capturing the surface index and total possible surfaces
-        surface_atoms: Atoms object of the surface
-        constrained_surface: constrained version of surface_atoms
-        millers, shift, top: respective info about the surface
+    Attributes
+    ----------
+    bulk_object : Bulk
+        bulk object that the surface comes from
+    surface_sampling_str : str
+        string capturing the surface index and total possible surfaces
+    surface_atoms : Atoms
+        actual atoms of the surface
+    constrained_surface : Atoms
+        constrained version of surface_atoms
+    millers : tuple
+        miller indices of the surface
+    shift : float
+        shift applied in the c-direction of bulk unit cell to get a termination
+    top : boolean
+        indicates the top or bottom termination of the pymatgen generated slab
+
+    Public methods
+    --------------
+    get_bulk_dict()
+        returns a dict containing info about the surface
     '''
+
     def __init__(self, bulk_object, surface_info, surface_index, total_surfaces_possible):
         '''
         Initialize the surface object, tag atoms, and constrain the surface.
