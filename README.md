@@ -72,13 +72,13 @@ Bulk database that is a dict where keys are the number of elements (1-3), and va
 
 Flat bulk database (all 11k bulks in one list), for use cases #2 and #3 above, where we want to retrieve bulks by their index:
 
-* https://dl.fbaipublicfiles.com/opencatalystproject/data/input_generation/bulk_db_flat_2020may12.pkl (MD5 checksum: `aaf192104fb51be84fdcf9fd7d3aae49`). Mapping between indices and bulks (MPID and composition): https://dl.fbaipublicfiles.com/opencatalystproject/data/input_generation/mapping_bulks_2020may12.txt
+* https://dl.fbaipublicfiles.com/opencatalystproject/data/input_generation/bulk_db_flat_2020may12.pkl (MD5 checksum: `aaf192104fb51be84fdcf9fd7d3aae49`). Corresponding mapping between indices and bulks (MPID and composition): https://dl.fbaipublicfiles.com/opencatalystproject/data/input_generation/mapping_bulks_2020may12.txt
 
 
 **Adsorbates**
 
-https://dl.fbaipublicfiles.com/opencatalystproject/data/input_generation/adsorbate_db_2020may12.pkl (MD5 checksum: `6c553a7c2009e11612c247ffb813fd74`)
-Mapping between indices and adsorbates (SMILES): https://dl.fbaipublicfiles.com/opencatalystproject/data/input_generation/mapping_adsorbates_2020may12.txt
+https://dl.fbaipublicfiles.com/opencatalystproject/data/input_generation/adsorbate_db_2020may12.pkl (MD5 checksum: `6c553a7c2009e11612c247ffb813fd74`). Corresponding
+mapping between indices and adsorbates (SMILES): https://dl.fbaipublicfiles.com/opencatalystproject/data/input_generation/mapping_adsorbates_2020may12.txt
 
 **Precomputed surfaces**
 
