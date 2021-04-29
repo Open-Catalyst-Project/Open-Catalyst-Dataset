@@ -77,8 +77,9 @@ Flat bulk database (all 11k bulks in one list), for use cases #2 and #3 above, w
 
 **Adsorbates**
 
-https://dl.fbaipublicfiles.com/opencatalystproject/data/input_generation/adsorbate_db_2020may12.pkl (MD5 checksum: `6c553a7c2009e11612c247ffb813fd74`). Corresponding
-mapping between indices and adsorbates (SMILES): https://dl.fbaipublicfiles.com/opencatalystproject/data/input_generation/mapping_adsorbates_2020may12.txt
+The latest version is https://dl.fbaipublicfiles.com/opencatalystproject/data/input_generation/adsorbate_db_2021apr28.pkl (MD5 checksum: `975e00a62c7b634b245102e42167b3fb`). Corresponding mapping between indices and adsorbates (SMILES): https://dl.fbaipublicfiles.com/opencatalystproject/data/input_generation/mapping_adsorbates_2020may12.txt
+
+Note: OC20 was generated with an older version (https://dl.fbaipublicfiles.com/opencatalystproject/data/input_generation/adsorbate_db_2020may12.pkl, MD5 checksum: `6c553a7c2009e11612c247ffb813fd74`), which contains an inconsistency that is fixed in the latest version.
 
 **Precomputed surfaces**
 
