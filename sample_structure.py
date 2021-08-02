@@ -47,7 +47,7 @@ class StructureSampler():
         selects the appropriate materials and writes to files
     '''
 
-    def __init__(self, args):
+    def __init__(self, args, atoms_hook=None):
         '''
         Set up args from argparse, random seed, and logging.
         '''
@@ -64,6 +64,8 @@ class StructureSampler():
         else:
             self.logger.info('Sampling one random structure')
             np.random.seed(self.args.seed)
+
+        self.atoms_hook = atoms_hook
 
     def run(self):
         '''
@@ -170,6 +172,10 @@ class StructureSampler():
             else:
                 adsorbed_bulk_dir = os.path.join(self.args.output_dir, output_name_template, 'adslab')
             adsorbed_bulk_dict = combined.get_adsorbed_bulk_dict(config_ind)
+            
+            if self.atoms_hook is not None:
+                self.atoms_hook(adsorbed_bulk_dict['adsorbed_bulk_atomsobject'])
+
             write_vasp_input_files(adsorbed_bulk_dict['adsorbed_bulk_atomsobject'], adsorbed_bulk_dir)
             self._write_metadata_pkl(adsorbed_bulk_dict, os.path.join(adsorbed_bulk_dir, 'metadata.pkl'))
             if config_ind == 0:
