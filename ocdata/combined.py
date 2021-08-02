@@ -95,6 +95,10 @@ class Combined():
         # with its connectivity matrix
         adsorbate_gratoms = self.convert_adsorbate_atoms_to_gratoms(adsorbate, bond_indices)
 
+        # Monkey patch attributes to resolve versioning issues
+        catkit.Gratoms._cell = catkit.Gratoms.cell
+        catkit.Gratoms._pbc = catkit.Gratoms.pbc
+
         # generate all possible adsorption configurations on that surface.
         # The "bonds" argument automatically take care of mono vs.
         # bidentate adsorption configuration.
