@@ -3,7 +3,7 @@ from ocdata.vasp import write_vasp_input_files
 from ocdata.adsorbates import Adsorbate
 from ocdata.bulk_obj import Bulk
 from ocdata.surfaces import Surface
-from ocdata.combined import Combined
+from ocdata.combined import Combined, CombinedRandomly
 
 import logging
 import numpy as np
@@ -18,6 +18,8 @@ class StructureSampler():
     - one random adsorbate/bulk/surface/config, based on a specified random seed
     - one specified adsorbate, n specified bulks, and all possible surfaces and configs
     - one specified adsorbate, n specified bulks, one specified surface, and all possible configs
+
+    Configurations can be either heuristically generated, or randomly generated.
 
     The output directory structure will look like the following:
     - For sampling a random structure, the directories will be `random{seed}/surface` and
@@ -133,10 +135,16 @@ class StructureSampler():
             output_name_template = f'{self.args.adsorbate_index}_{cur_bulk_index}_{cur_surface_index}'
         else:
             output_name_template = f'random{self.args.seed}'
+        if self.args.random_placements:
+            output_name_template = output_name_template + '_randomplacement'
 
         self._write_surface(surface, output_name_template)
 
-        combined = Combined(self.adsorbate, surface, self.args.enumerate_all_structures)
+        if self.args.random_placements:
+            combined = CombinedRandomly(self.adsorbate, surface, self.args.random_sites, self.args.seed, self.args.enumerate_all_structures)
+        else:
+            combined = Combined(self.adsorbate, surface, self.args.enumerate_all_structures)
+
         self._write_adsorbed_surface(combined, output_name_template)
 
     def _write_surface(self, surface, output_name_template):

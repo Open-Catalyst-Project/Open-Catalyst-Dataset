@@ -6,7 +6,7 @@ from ocdata.structure_sampler import StructureSampler
 def parse_args():
     parser = argparse.ArgumentParser(description='Sample adsorbate and bulk surface(s)')
 
-    parser.add_argument('--seed', type=int, default=None, help='Random seed for sampling')
+    parser.add_argument('--seed', type=int, default=None, help='Random seed for sampling/random sites generation')
 
     # input and output
     parser.add_argument('--bulk_db', type=str, required=True, help='Underlying db for bulks')
@@ -19,10 +19,11 @@ def parse_args():
     # args for enumerating all combinations:
     parser.add_argument('--enumerate_all_structures', action='store_true', default=False,
         help='Find all possible structures given a specific adsorbate and a list of bulks')
+    parser.add_argument('--random_placements', action='store_true', default=False, help='Input whether placement method is heuristic or random')
+    parser.add_argument('--random_sites', type=int, default=None, help='Number of random placement per adsorbate/surface if args.heuristic_placement is set to False')
     parser.add_argument('--adsorbate_index', type=int, default=None, help='Adsorbate index (int)')
     parser.add_argument('--bulk_indices', type=str, default=None, help='Comma separated list of bulk indices')
     parser.add_argument('--surface_index', type=int, default=None, help='Optional surface index (int)')
-
     parser.add_argument('--verbose', action='store_true', default=False, help='Log detailed info')
 
     # check that all needed args are supplied
