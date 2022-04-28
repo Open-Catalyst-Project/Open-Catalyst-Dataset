@@ -271,10 +271,11 @@ class CombinedRandomly():
         whether to enumerate all adslab placements instead of choosing one random
     random_sites : int
         Number of random placements
-    rotate_adsorbate : boolean
-        Torsion rotate adsorbate, suggest default to True
     random_seed : int
         A random seed
+    added_z: cushion space between surface atoms and adsorption site
+    rotate_adsorbate : boolean
+        Torsion rotate adsorbate, suggest default to True
     adsorbed_surface_atoms : list
         `Atoms` objects containing both the adsorbate and surface for all desired placements
     adsorbed_surface_sampling_strs : list
@@ -289,7 +290,7 @@ class CombinedRandomly():
     get_adsorbed_bulk_dict(ind)
         returns a dict of info for the adsorbate+surface of the specified config index
     '''
-    def __init__(self, adsorbate, surface, random_sites, random_seed, enumerate_all_configs, rotate_adsorbate=True):
+    def __init__(self, adsorbate, surface, random_sites, random_seed, enumerate_all_configs, added_z=2, rotate_adsorbate=True):
         '''
         Adds adsorbate to surface, does the constraining, and aggregates all data necessary to write out.
         Can either pick a random configuration or store all possible ones.
@@ -304,6 +305,7 @@ class CombinedRandomly():
         self.enumerate_all_configs = enumerate_all_configs
         self.random_sites = random_sites
         self.rotate_adsorbate = rotate_adsorbate
+        self.added_z = added_z
         self.random_seed = random_seed
         np.random.seed(self.random_seed)
         self.add_adsorbate_onto_surface_randomly(self.adsorbate.atoms, self.surface.surface_atoms,
@@ -320,8 +322,7 @@ class CombinedRandomly():
 
     def add_adsorbate_onto_surface_randomly(self, adsorbate, surface, num_sites):
         '''
-        This function will add adsorbate onto the surface for you randomly
-        you.
+        This function will add adsorbate onto the surface for you randomly.
 
         Args:
             adsorbate: An `ase.Atoms` object of the adsorbate
@@ -342,7 +343,7 @@ class CombinedRandomly():
         # surface.pbc = np.array([True, True, False])
 
         ################################################
-        random_sites = self.generate_random_sites(surface_atoms_pos, self.random_sites)
+        random_sites = self.generate_random_sites(surface_atoms_pos, num_sites)
         adsorbed_surfaces = self.place_adsorbate_on_sites(adsorbate, surface, random_sites)
         #################################################
 
@@ -381,11 +382,11 @@ class CombinedRandomly():
         all_sites = []
         for tri in simplices:
             triangle_positions = surface_atoms_pos[tri]
-            sites = self._random_sites_on_triangle(triangle_positions, equal_distr)
+            sites = self._random_sites_on_triangle(triangle_positions, equal_distr, self.added_z)
             all_sites += sites
         return all_sites
 
-    def _random_sites_on_triangle(self, surfsite_pos, k, added_z=2.5):
+    def _random_sites_on_triangle(self, surfsite_pos, k, added_z):
         """
         surfsite_pos: xyz coordinates of three points that forms a triangle in 3D space on surface
         k: number of random sites to be generated
