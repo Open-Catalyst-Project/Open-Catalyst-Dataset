@@ -1,14 +1,19 @@
+import numpy as np
+from scipy.spatial import Delaunay
+import itertools, copy, random, time
+
 from pymatgen.analysis.adsorption import AdsorbateSiteFinder
 from pymatgen.core.periodic_table import Element
-import numpy as np
-import itertools, copy, random, time
+from pymatgen.core.structure import *
 from pymatgen.util.coord import in_coord_list_pbc, pbc_shortest_vectors, \
 all_distances, lattice_points_in_supercell, coord_list_mapping_pbc
 from pymatgen.analysis.structure_matcher import StructureMatcher
+from pymatgen.analysis.structure_matcher import StructureMatcher
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-from scipy.spatial import Delaunay
-from pymatgen.core.structure import *
-from surface import * 
+
+from ocdata.oc22_dataset.surface import * 
+
+
 
 class MXideAdsorbateGenerator(AdsorbateSiteFinder):
     """

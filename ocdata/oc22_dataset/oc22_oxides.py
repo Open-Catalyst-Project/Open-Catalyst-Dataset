@@ -3,12 +3,14 @@ import os, glob, random, time, json, logging, argparse, copy, string, itertools,
 from pymatgen.core.structure import *
 from pymatgen.entries.computed_entries import ComputedStructureEntry
 from pymatgen.core.periodic_table import Element
-from MXide_adsorption import MXideAdsorbateGenerator
-from sets import MOSurfaceSet, set_bulk_magmoms
-from termination_generator import get_random_clean_slabs, center_slab
-from json.decoder import JSONDecodeError
-from adsorbate_configs import adslist, OOH_list
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+from json.decoder import JSONDecodeError
+
+from ocdata.oc22_dataset.MXide_adsorption import MXideAdsorbateGenerator
+from ocdata.oc22_dataset.sets import MOSurfaceSet, set_bulk_magmoms
+from ocdata.oc22_dataset.termination_generator import get_random_clean_slabs, center_slab
+from ocdata.oc22_dataset.adsorbate_configs import adslist, OOH_list
+
 
 def rid_generator(r=random):
     return ''.join([r.choice(string.ascii_letters

@@ -5,17 +5,19 @@ This module enumerates through all possible terminations (O-vacancies) through a
     To be moved to pymatgen once its ready.
 """
 
-from pymatgen.analysis.structure_matcher import StructureMatcher
 import numpy as np
 import itertools
-from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-from surface import get_symmetrically_distinct_miller_indices, SlabGenerator, center_slab
-from MXide_adsorption import AdsorbateSiteFinder, \
-make_superslab_with_partition, label_sites, get_repeat_from_min_lw
 import random
 import warnings
+
+from pymatgen.analysis.structure_matcher import StructureMatcher
+from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.util.coord import in_coord_list
 from pymatgen.core.structure import Structure, StructureError
+
+from ocdata.oc22_dataset.surface import get_symmetrically_distinct_miller_indices, SlabGenerator, center_slab
+from ocdata.oc22_dataset.MXide_adsorption import AdsorbateSiteFinder, \
+make_superslab_with_partition, label_sites, get_repeat_from_min_lw
 
 __author__ = "Richard Tran"
 __version__ = "0.1"
