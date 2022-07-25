@@ -1,11 +1,12 @@
 import unittest, sys, json, itertools, os
-sys.path.append(os.getcwd().replace(os.getcwd().split('/')[-1], ''))
+# sys.path.append(os.getcwd().replace(os.getcwd().split('/')[-1], ''))
 from pymatgen.entries.computed_entries import ComputedStructureEntry
 from pymatgen.core.periodic_table import Element
 from pymatgen.util.testing import PymatgenTest
 from pymatgen.analysis.phase_diagram import PhaseDiagram
 from pymatgen.analysis.structure_matcher import StructureMatcher
-from adsorbate_configs import adslist, OOH_list
+
+from ocdata.oc22_dataset.adsorbate_configs import adslist, OOH_list
 
 sm = StructureMatcher()
 
@@ -19,7 +20,7 @@ class BulkDataSetTest(PymatgenTest):
 
         # load bulk pmg entries
         self.bulk_dataset = [ComputedStructureEntry.from_dict(d) 
-                             for d in json.load(open('../bulk_oxides_20220621.json'))]
+                             for d in json.load(open('../../oc22_dataset/bulk_oxides_20220621.json'))]
                 
         # get elemental space
         self.elements_to_do = [el for el in Element 

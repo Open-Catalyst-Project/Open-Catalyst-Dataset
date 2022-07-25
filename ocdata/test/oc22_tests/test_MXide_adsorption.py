@@ -1,22 +1,18 @@
 import os, unittest, sys, json
-cwd = os.getcwd()
-sys.path.append(cwd.replace(cwd.split('/')[-1], ''))
-from adsorbate_configs import adslist, OOH_list
+# cwd = os.getcwd()
+# sys.path.append(cwd.replace(cwd.split('/')[-1], ''))
 
 from pymatgen.util.testing import PymatgenTest
 from pymatgen.core.structure import Structure, Lattice, Molecule
-from surface import SlabGenerator, generate_all_slabs, Slab
-
-from MXide_adsorption import MXideAdsorbateGenerator
 from pymatgen.analysis.structure_matcher import StructureMatcher
-from termination_generator import get_random_clean_slabs
 from pymatgen.entries.computed_entries import ComputedStructureEntry
 
-
+from ocdata.oc22_dataset.surface import SlabGenerator, generate_all_slabs, Slab
+from ocdata.oc22_dataset.adsorbate_configs import adslist, OOH_list
+from ocdata.oc22_dataset.MXide_adsorption import MXideAdsorbateGenerator
+from ocdata.oc22_dataset.termination_generator import get_random_clean_slabs
 
 __author__ = "Richard Tran"
-
-
 
 class MXideAdsorbateGeneratorTest(PymatgenTest):
     def setUp(self):

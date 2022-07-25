@@ -1,14 +1,15 @@
 import os, unittest, sys, json, random
-cwd = os.getcwd()
-sys.path.append(cwd.replace(cwd.split('/')[-1], ''))
+# cwd = os.getcwd()
+# sys.path.append(cwd.replace(cwd.split('/')[-1], ''))
 
 from pymatgen.util.testing import PymatgenTest
 from pymatgen.core.structure import Structure, Lattice
 from pymatgen.core.surface import SlabGenerator
 from pymatgen.analysis.structure_matcher import StructureMatcher
 from pymatgen.entries.computed_entries import ComputedStructureEntry
-from MXide_adsorption import MXideAdsorbateGenerator
-from termination_generator import all_surface_site_combination, get_random_clean_slabs
+
+from ocdata.oc22_dataset.MXide_adsorption import MXideAdsorbateGenerator
+from ocdata.oc22_dataset.termination_generator import all_surface_site_combination, get_random_clean_slabs
 
 
 __author__ = "Richard Tran"

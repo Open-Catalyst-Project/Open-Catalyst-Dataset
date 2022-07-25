@@ -1,12 +1,12 @@
 import os, unittest, sys, shutil, glob, filecmp
-cwd = os.getcwd()
-sys.path.append(cwd.replace(cwd.split('/')[-1], ''))
-from adsorbate_configs import adslist, OOH_list
-
-from pymatgen.util.testing import PymatgenTest
-from MXide_adsorption import MXideAdsorbateGenerator
+# cwd = os.getcwd()
+# sys.path.append(cwd.replace(cwd.split('/')[-1], ''))
 from pymatgen.analysis.structure_matcher import StructureMatcher
-from oc21_oxides import OC21
+from pymatgen.util.testing import PymatgenTest
+
+from ocdata.oc22_dataset.MXide_adsorption import MXideAdsorbateGenerator
+from ocdata.oc22_dataset.oc21_oxides import OC21
+from ocdata.oc22_dataset.adsorbate_configs import adslist, OOH_list
 
 
 __author__ = "Richard Tran"
