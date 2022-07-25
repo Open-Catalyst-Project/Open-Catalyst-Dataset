@@ -15,7 +15,7 @@ def rid_generator(r=random):
                              + string.digits) for n in range(10)])
 
 
-class OC21:
+class OC22:
     """
     A class that selects metal-oxide adsorbate/slab objects and writes vasp 
         input files for all materials available in the list of config files. 
@@ -116,7 +116,6 @@ class OC21:
         print('user_incar_settings', self.user_incar_settings)
         print('output_dir', output_dir)
         self.output_dir = output_dir
-        self.master_folder = 'oc21_random%s' %(self.seed)
 
         self.fail_safe = fail_safe
         self.verbose = verbose
@@ -437,7 +436,7 @@ def parse_args():
 if __name__ == '__main__':
 
     args = parse_args()
-    job = OC21(**{"output_dir": args.output_dir, "n_slabs": args.n_slabs, "n_ads": args.n_ads,
+    job = OC22(**{"output_dir": args.output_dir, "n_slabs": args.n_slabs, "n_ads": args.n_ads,
                   "n_adslabs": args.n_adslabs, "max_index": args.max_index, "total_calcs": args.total_calcs,
                   "n_rotations": args.n_rotations, "rot_axis": args.rot_axis, "min_lw": args.min_lw,
                   "repeat": args.repeat, "height": args.height, "max_coverage": args.max_coverage,

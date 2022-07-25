@@ -3,6 +3,8 @@
 # Distributed under the terms of the MIT License.
 
 """
+This is a modified version of the surface.py module of pymatgen.
+
 This module implements representations of slabs and surfaces, as well as
 algorithms for generating them. If you use this module, please consider
 citing the following work::
