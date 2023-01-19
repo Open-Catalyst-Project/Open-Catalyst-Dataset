@@ -224,6 +224,10 @@ class StructureSampler:
             write_vasp_input_files(
                 adsorbed_bulk_dict["adsorbed_bulk_atomsobject"], adsorbed_bulk_dir
             )
+            if self.args.no_vasp:
+                # a bit hacky but ASE defaults to writing everything out
+                for unused_file in ["KPOINTS", "INCAR", "POTCAR"]:
+                    os.remove(os.path.join(adsorbed_bulk_dir, unused_file))
             self._write_metadata_pkl(
                 adsorbed_bulk_dict, os.path.join(adsorbed_bulk_dir, "metadata.pkl")
             )
