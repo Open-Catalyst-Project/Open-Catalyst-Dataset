@@ -1,36 +1,42 @@
-'''
+"""
 This submodule contains the scripts that the we used to sample the adsorption
 structures.
 
 Note that some of these scripts were taken from
 [GASpy](https://github.com/ulissigroup/GASpy) with permission of author.
-'''
+"""
 
-__authors__ = ['Kevin Tran', 'Aini Palizhati', 'Siddharth Goyal', 'Zachary Ulissi']
-__email__ = ['ktran@andrew.cmu.edu']
+__authors__ = ["Kevin Tran", "Aini Palizhati", "Siddharth Goyal", "Zachary Ulissi"]
+__email__ = ["ktran@andrew.cmu.edu"]
 
 import math
-from collections import defaultdict
-import random
 import pickle
-import numpy as np
-import catkit
+import random
+import sys
+import time
+from collections import defaultdict
+
 import ase
 import ase.db
+import catkit
+import numpy as np
 from ase import neighborlist
 from ase.constraints import FixAtoms
 from ase.neighborlist import natural_cutoffs
-from pymatgen.io.ase import AseAtomsAdaptor
-from pymatgen.core.surface import SlabGenerator, get_symmetrically_distinct_miller_indices
-from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.analysis.local_env import VoronoiNN
-from .base_atoms.pkls import BULK_PKL, ADSORBATE_PKL
+from pymatgen.core.surface import (
+    SlabGenerator,
+    get_symmetrically_distinct_miller_indices,
+)
+from pymatgen.io.ase import AseAtomsAdaptor
+from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+
+from .base_atoms.pkls import ADSORBATE_PKL, BULK_PKL
 from .constants import MAX_MILLER
-import sys
-import time
+
 
 def enumerate_surfaces_for_saving(bulk_atoms, max_miller=MAX_MILLER):
-    '''
+    """
     Enumerate all the symmetrically distinct surfaces of a bulk structure. It
     will not enumerate surfaces with Miller indices above the `max_miller`
     argument. Note that we also look at the bottoms of surfaces if they are
@@ -48,28 +54,32 @@ def enumerate_surfaces_for_saving(bulk_atoms, max_miller=MAX_MILLER):
         all_slabs_info  A list of 4-tuples containing:  `pymatgen.Structure`
                         objects for surfaces we have enumerated, the Miller
                         indices, floats for the shifts, and Booleans for "top".
-    '''
+    """
     bulk_struct = standardize_bulk(bulk_atoms)
 
     all_slabs_info = []
     for millers in get_symmetrically_distinct_miller_indices(bulk_struct, MAX_MILLER):
-        slab_gen = SlabGenerator(initial_structure=bulk_struct,
-                                 miller_index=millers,
-                                 min_slab_size=7.,
-                                 min_vacuum_size=20.,
-                                 lll_reduce=False,
-                                 center_slab=True,
-                                 primitive=True,
-                                 max_normal_search=1)
-        slabs = slab_gen.get_slabs(tol=0.3,
-                                   bonds=None,
-                                   max_broken_bonds=0,
-                                   symmetrize=False)
+        slab_gen = SlabGenerator(
+            initial_structure=bulk_struct,
+            miller_index=millers,
+            min_slab_size=7.0,
+            min_vacuum_size=20.0,
+            lll_reduce=False,
+            center_slab=True,
+            primitive=True,
+            max_normal_search=1,
+        )
+        slabs = slab_gen.get_slabs(
+            tol=0.3, bonds=None, max_broken_bonds=0, symmetrize=False
+        )
 
         # If the bottoms of the slabs are different than the tops, then we want
         # to consider them, too
-        flipped_slabs_info = [(flip_struct(slab), millers, slab.shift, False)
-                              for slab in slabs if is_structure_invertible(slab) is False]
+        flipped_slabs_info = [
+            (flip_struct(slab), millers, slab.shift, False)
+            for slab in slabs
+            if is_structure_invertible(slab) is False
+        ]
 
         # Concatenate all the results together
         slabs_info = [(slab, millers, slab.shift, True) for slab in slabs]
@@ -78,7 +88,7 @@ def enumerate_surfaces_for_saving(bulk_atoms, max_miller=MAX_MILLER):
 
 
 def standardize_bulk(atoms):
-    '''
+    """
     There are many ways to define a bulk unit cell. If you change the unit cell
     itself but also change the locations of the atoms within the unit cell, you
     can get effectively the same bulk structure. To address this, there is a
@@ -90,7 +100,7 @@ def standardize_bulk(atoms):
         atoms   `ase.Atoms` object of the bulk you want to standardize
     Returns:
         standardized_struct     `pymatgen.Structure` of the standardized bulk
-    '''
+    """
     struct = AseAtomsAdaptor.get_structure(atoms)
     sga = SpacegroupAnalyzer(struct, symprec=0.1)
     standardized_struct = sga.get_conventional_standard_structure()
@@ -98,7 +108,7 @@ def standardize_bulk(atoms):
 
 
 def is_structure_invertible(structure):
-    '''
+    """
     This function figures out whether or not an `pymatgen.Structure` object has
     symmetricity. In this function, the affine matrix is a rotation matrix that
     is multiplied with the XYZ positions of the crystal. If the z,z component
@@ -115,7 +125,7 @@ def is_structure_invertible(structure):
     Returns
         A boolean indicating whether or not your `ase.Atoms` object is
         symmetric in z-direction (i.e. symmetric with respect to x-y plane).
-    '''
+    """
     # If any of the operations involve a transformation in the z-direction,
     # then the structure is invertible.
     sga = SpacegroupAnalyzer(structure, symprec=0.1)
@@ -128,7 +138,7 @@ def is_structure_invertible(structure):
 
 
 def flip_struct(struct):
-    '''
+    """
     Flips an atoms object upside down. Normally used to flip surfaces.
 
     Arg:
@@ -136,13 +146,13 @@ def flip_struct(struct):
     Returns:
         flipped_struct  The same `ase.Atoms` object that was fed as an
                         argument, but flipped upside down.
-    '''
+    """
     atoms = AseAtomsAdaptor.get_atoms(struct)
 
     # This is black magic wizardry to me. Good look figuring it out.
     atoms.wrap()
-    atoms.rotate(180, 'x', rotate_cell=True, center='COM')
-    if atoms.cell[2][2] < 0.:
+    atoms.rotate(180, "x", rotate_cell=True, center="COM")
+    if atoms.cell[2][2] < 0.0:
         atoms.cell[2] = -atoms.cell[2]
     if np.cross(atoms.cell[0], atoms.cell[1])[2] < 0.0:
         atoms.cell[1] = -atoms.cell[1]
@@ -151,24 +161,25 @@ def flip_struct(struct):
     flipped_struct = AseAtomsAdaptor.get_structure(atoms)
     return flipped_struct
 
-    
+
 def precompute_enumerate_surface(bulk_database, bulk_index, opfile):
 
-    with open(bulk_database, 'rb') as f:
+    with open(bulk_database, "rb") as f:
         inv_index = pickle.load(f)
     flatten = inv_index[1] + inv_index[2] + inv_index[3]
     assert bulk_index < len(flatten)
 
-    bulk, mpid = flatten[bulk_index] 
+    bulk, mpid = flatten[bulk_index]
 
     print(bulk, mpid)
     surfaces_info = enumerate_surfaces_for_saving(bulk)
 
-    with open(opfile, 'wb') as g:
+    with open(opfile, "wb") as g:
         pickle.dump(surfaces_info, g)
+
 
 if __name__ == "__main__":
     s = time.time()
     precompute_enumerate_surface(BULK_PKL, int(sys.argv[1]), sys.argv[2])
     e = time.time()
-    print(sys.argv[1], "Done in", e - s )
+    print(sys.argv[1], "Done in", e - s)

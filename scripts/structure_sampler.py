@@ -5,11 +5,11 @@ import time
 
 import numpy as np
 
-from ocdata.adsorbates import Adsorbate
-from ocdata.bulk_obj import Bulk
 from ocdata.combined import Combined, CombinedRandomly
-from ocdata.surfaces import Surface
-from ocdata.vasp import write_vasp_input_files
+from ocdata.core.adsorbate import Adsorbate
+from ocdata.core.bulk import Bulk
+from ocdata.core.surfaces import Surface
+from ocdata.utils.vasp import write_vasp_input_files
 
 
 class StructureSampler:
@@ -236,14 +236,13 @@ class StructureSampler:
                     f"wrote adsorbed surface ({adsorbed_bulk_dict['adsorbed_bulk_samplingstr']}) to {adsorbed_bulk_dir}"
                 )
 
-    def _write_metadata_pkl(self, dict_to_write, path):
+    def _write_metadata_pkl(self, dict_to_write, file_path):
         """
         Writes a dict as a metadata pickle
 
         Args:
             dict_to_write: dict containing all info to dump as file
-            path: output file path
+            file_path: output file path
         """
-        file_path = os.path.join(path, "metadata.pkl")
-        with open(path, "wb") as f:
+        with open(file_path, "wb") as f:
             pickle.dump(dict_to_write, f)
