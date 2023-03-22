@@ -1,8 +1,10 @@
+import pickle
+
 import numpy as np
 import pandas as pd
-import pickle
 from ase import neighborlist
 from ase.neighborlist import natural_cutoffs
+
 
 def obtain_metadata(input_dir, split):
     """
@@ -16,10 +18,11 @@ def obtain_metadata(input_dir, split):
                 metadata (tuple)  adslab properties.
                                   Ex: ('mp-126', (1,1,1), 0.025, True, '*OH', (0,0,0), 'val_ood_ads')
     """
-    m = pickle.load(open(input_dir+'metadata.pkl', 'rb'))
-    m = m['adsorbed_bulk_metadata']
+    m = pickle.load(open(input_dir + "metadata.pkl", "rb"))
+    m = m["adsorbed_bulk_metadata"]
     metadata = (*m, split)
     return metadata
+
 
 def create_df(metadata_lst, df_name=None):
     """
@@ -34,17 +37,31 @@ def create_df(metadata_lst, df_name=None):
     """
     if df_name is None:
         print("You did not provide a dataframe name, we will store it as df.csv")
-        df_name = 'df'
+        df_name = "df"
     if np.shape(metadata_lst)[1] != 7:
-        raise ValueError("The metadata is missing a value, check to make sure you have mpid, miller index, \
-                          shift, top, adsorbate smile string, adsorption site coordinates, and which split data belongs to")
-    df = pd.DataFrame(metadata_lst, columns=["mpid", "miller", "shift", "top",
-                                         "adsorbate", "adsorption_site", "tag"])
-    df.to_csv('{}.csv'.format(df_name))
+        raise ValueError(
+            "The metadata is missing a value, check to make sure you have mpid, miller index, \
+                          shift, top, adsorbate smile string, adsorption site coordinates, and which split data belongs to"
+        )
+    df = pd.DataFrame(
+        metadata_lst,
+        columns=[
+            "mpid",
+            "miller",
+            "shift",
+            "top",
+            "adsorbate",
+            "adsorption_site",
+            "tag",
+        ],
+    )
+    df.to_csv("{}.csv".format(df_name))
     return df
 
-def adslabs_are_unique(df, unique_by=["mpid", "miller", "shift", "top",
-                                      "adsorbate", "adsorption_site"]):
+
+def adslabs_are_unique(
+    df, unique_by=["mpid", "miller", "shift", "top", "adsorbate", "adsorption_site"]
+):
     """
     Test if there are duplicate adslabs given a df. If the input is another
     format, convert it to df first.
@@ -58,7 +75,8 @@ def adslabs_are_unique(df, unique_by=["mpid", "miller", "shift", "top",
     if len(unique_adslabs) != len(df):
         raise ValueError("There are duplicates in the dataframe provided")
 
-def check_commonelems(df, split1, split2, check='adsorbate'):
+
+def check_commonelems(df, split1, split2, check="adsorbate"):
     """
     Given a df containing all the metadata of the calculations, check to see if there are
     any bulk or adsorbate duplicates between train and val/test_ood. The dataframe should
@@ -68,17 +86,18 @@ def check_commonelems(df, split1, split2, check='adsorbate'):
         split1, split2   two of the splits from 'train', 'val_id', 'test_id',
                          'val_ood_cat/ads/both', or 'test_ood_cat/ads/both'.
     """
-    split1_df = df.loc[df.tag==split1]
-    split2_df = df.loc[df.tag==split2]
+    split1_df = df.loc[df.tag == split1]
+    split2_df = df.loc[df.tag == split2]
 
     if check == "adsorbate":
-        common_elems = set(split1_df.adsorbate.values)&set(split2_df.adsorbate.values)
+        common_elems = set(split1_df.adsorbate.values) & set(split2_df.adsorbate.values)
         if len(common_elems) != 0:
             raise ValueError("{} are in both datasets!".format(common_elems))
     elif check == "bulk":
-        common_elems = set(split1_df.mpid.values)&set(split2_df.mpid.values)
+        common_elems = set(split1_df.mpid.values) & set(split2_df.mpid.values)
         if len(common_elems) != 0:
-            raise ValueError("{} are in both dataset!".format(split))
+            raise ValueError("{} are in both dataset!".format(common_elems))
+
 
 def is_adsorbate_placed_correct(adslab_input, atoms_tag):
     """
@@ -94,9 +113,10 @@ def is_adsorbate_placed_correct(adslab_input, atoms_tag):
                        return False.
 
     """
-    adsorbate_idx = [idx for idx, tag in enumerate(atoms_tag) if tag==2]
+    adsorbate_idx = [idx for idx, tag in enumerate(atoms_tag) if tag == 2]
     connectivity = _get_connectivity(adslab_input[adsorbate_idx])
-    return np.all(np.sum(connectivity, axis=0)!=0)
+    return np.all(np.sum(connectivity, axis=0) != 0)
+
 
 def _get_connectivity(atoms):
     """
@@ -107,7 +127,9 @@ def _get_connectivity(atoms):
                 matrix     The connectivity matrix of the atoms object.
     """
     cutoff = natural_cutoffs(atoms)
-    neighborList = neighborlist.NeighborList(cutoff, self_interaction=False, bothways=True)
+    neighborList = neighborlist.NeighborList(
+        cutoff, self_interaction=False, bothways=True
+    )
     neighborList.update(atoms)
     matrix = neighborlist.get_connectivity_matrix(neighborList.nl).toarray()
     return matrix

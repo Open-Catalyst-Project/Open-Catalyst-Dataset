@@ -1,10 +1,11 @@
-import pickle
-import os
-import numpy as np
-import sys
-import multiprocessing as mp
 import argparse
-from ase.io import read, Trajectory
+import multiprocessing as mp
+import os
+import pickle
+import sys
+
+import numpy as np
+from ase.io import Trajectory, read
 from tqdm import tqdm
 
 
@@ -43,7 +44,6 @@ def check_DFT_energy(sid, path, e_tol=0.05):
                 sid, path
             )
         )
-    flagged = False
     energies = [traj[i].get_potential_energy() for i in range(len(traj))]
     is_monotonic = all(
         energies[i + 1] - energies[i] < e_tol for i in range(len(energies) - 1)

@@ -1,8 +1,9 @@
+import argparse
+import errno
+import os
+
 import ase
 import ase.io
-import os
-import errno
-import argparse 
 from ase.io.trajectory import TrajectoryReader
 
 
@@ -28,13 +29,25 @@ def compare_runs(path1, path2, reference_type, tol):
         return True
     return False
 
+
 def create_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("--path1", type=str, help="Path of reference traj/xml file")
     parser.add_argument("--path2", type=str, help="Path of current vasprun.xml file")
-    parser.add_argument("--type", type=str, default="xml", help="Compare current vasprun.xml file with `xml` or `traj`")
-    parser.add_argument("--tolerance", type=float, default=1e-4, help="Tolerance to compare potential energies")
+    parser.add_argument(
+        "--type",
+        type=str,
+        default="xml",
+        help="Compare current vasprun.xml file with `xml` or `traj`",
+    )
+    parser.add_argument(
+        "--tolerance",
+        type=float,
+        default=1e-4,
+        help="Tolerance to compare potential energies",
+    )
     return parser
+
 
 def main(args):
     ans = compare_runs(args.path1, args.path2, args.type, args.tolerance)
@@ -42,6 +55,7 @@ def main(args):
         print("Passed: Converged to same structures")
     else:
         print("Failed: Converged to different relaxations")
+
 
 if __name__ == "__main__":
     parser = create_parser()
