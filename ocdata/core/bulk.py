@@ -42,7 +42,7 @@ class Bulk:
         self,
         bulk_atoms: ase.Atoms = None,
         bulk_id_from_db: int = None,
-        # mp_id=None,
+        # mp_id = None,
         bulk_db_path: str = BULK_PKL_PATH,
         precomputed_surfaces_path: str = PRECOMPUTED_SURFACES_DIR_PATH,
     ):
