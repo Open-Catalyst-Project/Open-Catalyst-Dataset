@@ -1,7 +1,9 @@
 import math
 import os
 import pickle
+from collections import defaultdict
 
+import ase
 import numpy as np
 from pymatgen.core.surface import (
     SlabGenerator,
@@ -10,178 +12,114 @@ from pymatgen.core.surface import (
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 
-from .constants import COVALENT_MATERIALS_MPIDS, MAX_MILLER
+from ocdata.configs.constants import COVALENT_MATERIALS_MPIDS, MAX_MILLER
+from ocdata.configs.paths import BULK_PKL_PATH, PRECOMPUTED_SURFACES_DIR_PATH
 
 
 class Bulk:
     """
-    This class handles all things with the bulk.
-    It also provides possible surfaces, later used to create a Surface object.
+    Initializes a bulk object in one of 3 ways:
+    - Directly pass in an ase.Atoms object.
+    - Pass in index of bulk to select from bulk database.
+    - Randomly sample a bulk from bulk database.
 
-    Attributes
-    ----------
-    precomputed_structures : str
-        root dir of precomputed structures
-    bulk_atoms : Atoms
-        actual atoms of the bulk
-    mpid : str
-        mpid of the bulk
-    bulk_sampling_str : str
-        string capturing the bulk index and number of possible bulks
-    index_of_bulk_atoms : int
-        index of bulk in the db
-    n_elems : int
-        number of elements of the bulk
-    elem_sampling_str : str
-        string capturing n_elems and the max possible elements
-
-    Public methods
-    --------------
-    get_possible_surfaces()
-        returns a list of possible surfaces for this bulk instance
+    Arguments
+    ---------
+    bulk_atoms: ase.Atoms
+        Bulk structure.
+    bulk_id_from_db: int
+        Index of bulk to select if not doing a random sample.
+    bulk_db_path: str
+        Path to bulk database.
+    precomputed_surfaces_path: str
+        Path to folder of precomputed surfaces.
+    mp_id: str
+        Materials Project ID of bulk to select if not doing a random sample.
+        [CURRENTLY NOT SUPPORTED.]
     """
 
     def __init__(
-        self, bulk_database, precomputed_structures=None, bulk_index=None, max_elems=3
+        self,
+        bulk_atoms: ase.Atoms = None,
+        bulk_id_from_db: int = None,
+        # mp_id=None,
+        bulk_db_path: str = BULK_PKL_PATH,
+        precomputed_surfaces_path: str = PRECOMPUTED_SURFACES_DIR_PATH,
     ):
-        """
-        Initializes the object by choosing or sampling from the bulk database
+        self.bulk_id_from_db = bulk_id_from_db
+        self.bulk_db_path = bulk_db_path
+        self.precomputed_surfaces_path = precomputed_surfaces_path
 
-        Args:
-            bulk_database: either a list of dict of bulks
-            precomputed_structures: Root directory of precomputed structures for
-                                    surface enumeration
-            bulk_index: index of bulk to select if not doing a random sample
-            max_elems: max number of elements for any bulk
-        """
-        self.precomputed_structures = precomputed_structures
-        self.choose_bulk_pkl(bulk_database, bulk_index, max_elems)
+        if bulk_atoms is not None:
+            self.atoms = bulk_atoms
+            self.mpid = None
+        elif bulk_id_from_db is not None:
+            bulk_db = pickle.load(open(bulk_db_path, "rb"))
+            (
+                self.atoms,
+                self.mpid,
+                _,
+                _,
+            ) = bulk_db[bulk_id_from_db]
+        else:
+            bulk_db = pickle.load(open(bulk_db_path, "rb"))
+            bulk_id_from_db = np.random.randint(len(bulk_db))
+            (
+                self.atoms,
+                self.mpid,
+                _,
+                _,
+            ) = bulk_db[bulk_id_from_db]
+            self.bulk_id_from_db = bulk_id_from_db
 
-    def choose_bulk_pkl(self, bulk_db, bulk_index, max_elems):
-        """
-        Chooses a bulk from our pkl file at random as long as the bulk contains
-        the specified number of elements in any composition.
+        # Comment(@abhshkdz): Do we need this?
+        self.n_elems = len(set(self.atoms.symbols))
 
-        Args:
-            bulk_db         Unpickled dict or list of bulks
-            bulk_index      Index of which bulk to select. If None, randomly sample one.
-            max_elems       Max elems for any bulk structure. Currently it is 3 by default.
+    def set_mpid(self, mpid: str):
+        self.mpid = mpid
 
-        Sets as class attributes:
-            bulk_atoms                  `ase.Atoms` of the chosen bulk structure.
-            mpid                        A string indicating which MPID the bulk is
-            bulk_sampling_str           A string to enumerate the sampled structure
-            index_of_bulk_atoms         Index of the chosen bulk in the array (should match
-                                        bulk_index if provided)
-        """
-
-        try:
-            if bulk_index is not None:
-                assert (
-                    len(bulk_db) > max_elems
-                ), f"Bulk db only has {len(bulk_db)} entries. Did you pass in the correct bulk database?"
-                assert isinstance(bulk_db[bulk_index], tuple)
-
-                (
-                    self.bulk_atoms,
-                    self.mpid,
-                    self.bulk_sampling_str,
-                    self.index_of_bulk_atoms,
-                ) = bulk_db[bulk_index]
-                self.bulk_sampling_str = f"{self.index_of_bulk_atoms}"
-                self.n_elems = len(set(self.bulk_atoms.symbols))  # 1, 2, or 3
-                self.elem_sampling_str = f"{self.n_elems}"
-
-            else:
-                self.sample_n_elems()
-                assert isinstance(
-                    bulk_db, dict
-                ), "Did you pass in the correct bulk database?"
-                assert (
-                    self.n_elems in bulk_db.keys()
-                ), f"Bulk db does not have bulks of {self.n_elems} elements"
-                assert isinstance(
-                    bulk_db[self.n_elems], list
-                ), "Did you pass in the correct bulk database?"
-
-                total_elements_for_key = len(bulk_db[self.n_elems])
-                row_bulk_index = np.random.choice(total_elements_for_key)
-                (
-                    self.bulk_atoms,
-                    self.mpid,
-                    self.bulk_sampling_str,
-                    self.index_of_bulk_atoms,
-                ) = bulk_db[self.n_elems][row_bulk_index]
-
-        except IndexError:
-            raise ValueError(
-                "Randomly chose to look for a %i-component material, "
-                "but no such materials exist. Please add one "
-                "to the database or change the weights to exclude "
-                "this number of components." % self.n_elems
-            )
-
-    def sample_n_elems(self, n_cat_elems_weights={1: 0.05, 2: 0.65, 3: 0.3}):
-        """
-        Chooses the number of species we should look for in this sample.
-
-        Arg:
-            n_cat_elems_weights A dictionary whose keys are integers containing the
-                                number of species you want to consider and whose
-                                values are the probabilities of selecting this
-                                number. The probabilities must sum to 1.
-        Sets:
-            n_elems             An integer showing how many species have been chosen.
-            elem_sampling_str   Enum string of [chosen n_elems]/[total number of choices]
-        """
-
-        possible_n_elems = list(n_cat_elems_weights.keys())
-        weights = list(n_cat_elems_weights.values())
-        assert math.isclose(sum(weights), 1)
-
-        self.n_elems = np.random.choice(possible_n_elems, p=weights)
-        self.elem_sampling_str = str(self.n_elems) + "/" + str(len(possible_n_elems))
-
-    def get_possible_surfaces(self):
+    def get_surfaces(self):
         """
         Returns a list of possible surfaces for this bulk instance.
         This can be later used to iterate through all surfaces,
         or select one at random, to make a Surface object.
         """
-        if self.precomputed_structures:
-            surfaces_info = self.read_from_precomputed_enumerations(
-                self.index_of_bulk_atoms
-            )
+        if (
+            self.precomputed_surfaces_path is not None
+            and self.bulk_id_from_db is not None
+        ):
+            surfaces_info = self.get_precomputed_surfaces()
         else:
-            surfaces_info = self.enumerate_surfaces()
+            surfaces_info = self.compute_surfaces()
+
         return surfaces_info
 
-    def read_from_precomputed_enumerations(self, index):
+    def get_precomputed_surfaces(self):
         """
-        Loads relevant pickle of precomputed surfaces.
+        Loads relevant pickle of precomputed surfaces, and returns
+        a list of tuples containing: (atoms, miller, shift, top).
+        """
+        assert self.bulk_id_from_db is not None
 
-        Args:
-            index: bulk index
-        Returns:
-            surfaces_info: a list of surface_info tuples (atoms, miller, shift, top)
-        """
-        with open(
-            os.path.join(self.precomputed_structures, str(index) + ".pkl"), "rb"
-        ) as f:
+        bulk_surfaces_path = os.path.join(
+            self.precomputed_surfaces_path, f"{self.bulk_id_from_db}.pkl"
+        )
+        assert os.path.exists(bulk_surfaces_path)
+
+        with open(bulk_surfaces_path, "rb") as f:
             surfaces_info = pickle.load(f)
+
         return surfaces_info
 
-    def enumerate_surfaces(self, max_miller=MAX_MILLER):
+    def compute_surfaces(self, max_miller=MAX_MILLER):
         """
-        Enumerate all the symmetrically distinct surfaces of a bulk structure. It
-        will not enumerate surfaces with Miller indices above the `max_miller`
-        argument. Note that we also look at the bottoms of surfaces if they are
-        distinct from the top. If they are distinct, we flip the surface so the bottom
-        is pointing upwards.
+        Enumerates all the symmetrically distinct surfaces of a bulk structure.
+        It will not enumerate surfaces with Miller indices above the
+        `max_miller` argument. Note that we also look at the bottoms of surfaces
+        if they are distinct from the top. If they are distinct, we flip the
+        surface so the bottom is pointing upwards.
 
         Args:
-            bulk_atoms  `ase.Atoms` object of the bulk you want to enumerate
-                        surfaces from.
             max_miller  An integer indicating the maximum Miller index of the surfaces
                         you are willing to enumerate. Increasing this argument will
                         increase the number of surfaces, but the surfaces will
@@ -191,7 +129,7 @@ class Bulk:
                             objects for surfaces we have enumerated, the Miller
                             indices, floats for the shifts, and Booleans for "top".
         """
-        bulk_struct = self.standardize_bulk(self.bulk_atoms)
+        bulk_struct = standardize_bulk(self.atoms)
 
         all_slabs_info = []
         for millers in get_symmetrically_distinct_miller_indices(
@@ -212,111 +150,130 @@ class Bulk:
             )
 
             # Additional filtering for the 2D materials' slabs
-            if self.mpid in COVALENT_MATERIALS_MPIDS:
-                slabs = [
-                    slab for slab in slabs if self.is_2D_slab_reasonsable(slab) is True
-                ]
+            if self.mpid is not None and self.mpid in COVALENT_MATERIALS_MPIDS:
+                slabs = [slab for slab in slabs if is_2D_slab_reasonable(slab) is True]
 
-            # If the bottoms of the slabs are different than the tops, then we want
-            # to consider them, too
+            # If the bottom of the slabs are different than the tops, then we
+            # want to consider them too.
             if len(slabs) != 0:
                 flipped_slabs_info = [
-                    (self.flip_struct(slab), millers, slab.shift, False)
+                    (flip_struct(slab), millers, slab.shift, False)
                     for slab in slabs
-                    if self.is_structure_invertible(slab) is False
+                    if is_structure_invertible(slab) is False
                 ]
 
                 # Concatenate all the results together
                 slabs_info = [(slab, millers, slab.shift, True) for slab in slabs]
                 all_slabs_info.extend(slabs_info + flipped_slabs_info)
+
         return all_slabs_info
 
-    def is_2D_slab_reasonsable(self, struct):
-        """
-        There are 400+ 2D bulk materials whose slabs generated by pymaten require
-        additional filtering: some slabs are cleaved where one or more surface atoms
-        have no bonds with other atoms on the slab.
 
-        Arg:
-            struct   `pymatgen.Structure` object of a slab
-        Returns:
-            A boolean indicating whether or not the slab is
-            reasonable.
-        """
-        for site in struct:
-            if len(struct.get_neighbors(site, 3)) == 0:
-                return False
-        return True
+def is_2D_slab_reasonable(struct):
+    """
+    There are 400+ 2D bulk materials whose slabs generated by pymatgen require
+    additional filtering: some slabs are cleaved where one or more surface atoms
+    have no bonds with other atoms on the slab.
 
-    def standardize_bulk(self, atoms):
-        """
-        There are many ways to define a bulk unit cell. If you change the unit cell
-        itself but also change the locations of the atoms within the unit cell, you
-        can get effectively the same bulk structure. To address this, there is a
-        standardization method used to reduce the degrees of freedom such that each
-        unit cell only has one "true" configuration. This function will align a
-        unit cell you give it to fit within this standardization.
+    Arguments
+    ---------
+    struct: pymatgen.Structure
+        `pymatgen.Structure` object of a slab
 
-        Args:
-            atoms: `ase.Atoms` object of the bulk you want to standardize
-        Returns:
-            standardized_struct: `pymatgen.Structure` of the standardized bulk
-        """
-        struct = AseAtomsAdaptor.get_structure(atoms)
-        sga = SpacegroupAnalyzer(struct, symprec=0.1)
-        standardized_struct = sga.get_conventional_standard_structure()
-        return standardized_struct
+    Returns
+    -------
+    A boolean indicating whether or not the slab is reasonable, where
+    reasonable is defined as having at least one neighboring atom within 3A.
+    """
+    for site in struct:
+        if len(struct.get_neighbors(site, 3)) == 0:
+            return False
+    return True
 
-    def flip_struct(self, struct):
-        """
-        Flips an atoms object upside down. Normally used to flip surfaces.
 
-        Arg:
-            struct   `pymatgen.Structure` object
-        Returns:
-            flipped_struct: The same `ase.Atoms` object that was fed as an
-                            argument, but flipped upside down.
-        """
-        atoms = AseAtomsAdaptor.get_atoms(struct)
+def standardize_bulk(atoms):
+    """
+    There are many ways to define a bulk unit cell. If you change the unit
+    cell itself but also change the locations of the atoms within the unit
+    cell, you can effectively get the same bulk structure. To address this,
+    there is a standardization method used to reduce the degrees of freedom
+    such that each unit cell only has one "true" configuration. This
+    function will align a unit cell you give it to fit within this
+    standardization.
 
-        # This is black magic wizardry to me. Good look figuring it out.
-        atoms.wrap()
-        atoms.rotate(180, "x", rotate_cell=True, center="COM")
-        if atoms.cell[2][2] < 0.0:
-            atoms.cell[2] = -atoms.cell[2]
-        if np.cross(atoms.cell[0], atoms.cell[1])[2] < 0.0:
-            atoms.cell[1] = -atoms.cell[1]
-        atoms.center()
-        atoms.wrap()
+    Arguments
+    ---------
+    atoms: ase.Atoms
+        `ase.Atoms` object of the bulk you want to standardize
 
-        flipped_struct = AseAtomsAdaptor.get_structure(atoms)
-        return flipped_struct
+    Returns
+    -------
+    standardized_struct: pymatgen.Structure
+        `pymatgen.Structure` of the standardized bulk
+    """
+    struct = AseAtomsAdaptor.get_structure(atoms)
+    sga = SpacegroupAnalyzer(struct, symprec=0.1)
+    standardized_struct = sga.get_conventional_standard_structure()
+    return standardized_struct
 
-    def is_structure_invertible(self, structure):
-        """
-        This function figures out whether or not an `pymatgen.Structure` object has
-        symmetricity. In this function, the affine matrix is a rotation matrix that
-        is multiplied with the XYZ positions of the crystal. If the z,z component
-        of that is negative, it means symmetry operation exist, it could be a
-        mirror operation, or one that involves multiple rotations/etc. Regardless,
-        it means that the top becomes the bottom and vice-versa, and the structure
-        is the symmetric. i.e. structure_XYZ = structure_XYZ*M.
 
-        In short:  If this function returns `False`, then the input structure can
-        be flipped in the z-direction to create a new structure.
+def flip_struct(struct):
+    """
+    Flips an atoms object upside down. Normally used to flip surfaces.
 
-        Arg:
-            structure: A `pymatgen.Structure` object.
-        Returns
-            A boolean indicating whether or not your `ase.Atoms` object is
-            symmetric in z-direction (i.e. symmetric with respect to x-y plane).
-        """
-        # If any of the operations involve a transformation in the z-direction,
-        # then the structure is invertible.
-        sga = SpacegroupAnalyzer(structure, symprec=0.1)
-        for operation in sga.get_symmetry_operations():
-            xform_matrix = operation.affine_matrix
-            z_xform = xform_matrix[2, 2]
-            if z_xform == -1:
-                return True
-        return False
+    Arguments
+    ---------
+    struct: pymatgen.Structure
+        `pymatgen.Structure` object of the surface you want to flip
+
+    Returns
+    -------
+    flipped_struct: pymatgen.Structure
+        `pymatgen.Structure` object of the flipped surface.
+    """
+    atoms = AseAtomsAdaptor.get_atoms(struct)
+
+    # This is black magic wizardry to me. Good look figuring it out.
+    atoms.wrap()
+    atoms.rotate(180, "x", rotate_cell=True, center="COM")
+    if atoms.cell[2][2] < 0.0:
+        atoms.cell[2] = -atoms.cell[2]
+    if np.cross(atoms.cell[0], atoms.cell[1])[2] < 0.0:
+        atoms.cell[1] = -atoms.cell[1]
+    atoms.center()
+    atoms.wrap()
+
+    return AseAtomsAdaptor.get_structure(atoms)
+
+
+def is_structure_invertible(structure):
+    """
+    This function figures out whether or not an `pymatgen.Structure` object has
+    symmetricity. In this function, the affine matrix is a rotation matrix that
+    is multiplied with the XYZ positions of the crystal. If the z,z component
+    of that is negative, it means symmetry operation exist, it could be a
+    mirror operation, or one that involves multiple rotations/etc. Regardless,
+    it means that the top becomes the bottom and vice-versa, and the structure
+    is the symmetric. i.e. structure_XYZ = structure_XYZ*M.
+
+    In short:  If this function returns `False`, then the input structure can
+    be flipped in the z-direction to create a new structure.
+
+    Arguments
+    ---------
+    struct: pymatgen.Structure
+
+    Returns
+    -------
+    A boolean indicating whether or not your `ase.Atoms` object is
+    symmetric in z-direction (i.e. symmetric with respect to x-y plane).
+    """
+    # If any of the operations involve a transformation in the z-direction,
+    # then the structure is invertible.
+    sga = SpacegroupAnalyzer(structure, symprec=0.1)
+    for operation in sga.get_symmetry_operations():
+        xform_matrix = operation.affine_matrix
+        z_xform = xform_matrix[2, 2]
+        if z_xform == -1:
+            return True
+    return False
