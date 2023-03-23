@@ -11,7 +11,7 @@ from pymatgen.core import Composition
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 
-from .constants import MIN_XY
+from ocdata.configs.constants import MIN_XY
 
 
 def constrain_surface(atoms):
