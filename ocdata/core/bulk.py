@@ -12,7 +12,7 @@ from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 
 from ocdata.configs.constants import COVALENT_MATERIALS_MPIDS, MAX_MILLER
-from ocdata.configs.paths import BULK_PKL_PATH, PRECOMPUTED_SURFACES_DIR_PATH
+from ocdata.configs.paths import BULK_PKL_PATH, PRECOMPUTED_SLABS_DIR_PATH
 
 
 class Bulk:
@@ -30,8 +30,8 @@ class Bulk:
         Index of bulk to select if not doing a random sample.
     bulk_db_path: str
         Path to bulk database.
-    precomputed_surfaces_path: str
-        Path to folder of precomputed surfaces.
+    precomputed_slabs_path: str
+        Path to folder of precomputed slabs.
     mp_id: str
         Materials Project ID of bulk to select if not doing a random sample.
         [CURRENTLY NOT SUPPORTED.]
@@ -43,11 +43,11 @@ class Bulk:
         bulk_id_from_db: int = None,
         # mp_id = None,
         bulk_db_path: str = BULK_PKL_PATH,
-        precomputed_surfaces_path: str = PRECOMPUTED_SURFACES_DIR_PATH,
+        precomputed_slabs_path: str = PRECOMPUTED_SLABS_DIR_PATH,
     ):
         self.bulk_id_from_db = bulk_id_from_db
         self.bulk_db_path = bulk_db_path
-        self.precomputed_surfaces_path = precomputed_surfaces_path
+        self.precomputed_slabs_path = precomputed_slabs_path
 
         if bulk_atoms is not None:
             self.atoms = bulk_atoms
@@ -77,55 +77,52 @@ class Bulk:
     def set_mpid(self, mpid: str):
         self.mpid = mpid
 
-    def get_surfaces(self):
+    def get_slabs(self):
         """
-        Returns a list of possible surfaces for this bulk instance.
-        This can be later used to iterate through all surfaces,
+        Returns a list of possible slabs for this bulk instance.
+        This can be later used to iterate through all slabs,
         or select one at random, to make a Surface object.
         """
-        if (
-            self.precomputed_surfaces_path is not None
-            and self.bulk_id_from_db is not None
-        ):
-            surfaces_info = self.get_precomputed_surfaces()
+        if self.precomputed_slabs_path is not None and self.bulk_id_from_db is not None:
+            slabs = self.get_precomputed_slabs()
         else:
-            surfaces_info = self.compute_surfaces()
+            slabs = self.compute_slabs()
 
-        return surfaces_info
+        return slabs
 
-    def get_precomputed_surfaces(self):
+    def get_precomputed_slabs(self):
         """
-        Loads relevant pickle of precomputed surfaces, and returns
+        Loads relevant pickle of precomputed slabs, and returns
         a list of tuples containing: (atoms, miller, shift, top).
         """
         assert self.bulk_id_from_db is not None
 
-        bulk_surfaces_path = os.path.join(
-            self.precomputed_surfaces_path, f"{self.bulk_id_from_db}.pkl"
+        bulk_slabs_path = os.path.join(
+            self.precomputed_slabs_path, f"{self.bulk_id_from_db}.pkl"
         )
-        assert os.path.exists(bulk_surfaces_path)
+        assert os.path.exists(bulk_slabs_path)
 
-        with open(bulk_surfaces_path, "rb") as f:
-            surfaces_info = pickle.load(f)
+        with open(bulk_slabs_path, "rb") as f:
+            slabs_info = pickle.load(f)
 
-        return surfaces_info
+        return slabs_info
 
-    def compute_surfaces(self, max_miller=MAX_MILLER):
+    def compute_slabs(self, max_miller=MAX_MILLER):
         """
-        Enumerates all the symmetrically distinct surfaces of a bulk structure.
-        It will not enumerate surfaces with Miller indices above the
-        `max_miller` argument. Note that we also look at the bottoms of surfaces
+        Enumerates all the symmetrically distinct slabs of a bulk structure.
+        It will not enumerate slabs with Miller indices above the
+        `max_miller` argument. Note that we also look at the bottoms of slabs
         if they are distinct from the top. If they are distinct, we flip the
         surface so the bottom is pointing upwards.
 
         Args:
-            max_miller  An integer indicating the maximum Miller index of the surfaces
+            max_miller  An integer indicating the maximum Miller index of the slabs
                         you are willing to enumerate. Increasing this argument will
-                        increase the number of surfaces, but the surfaces will
+                        increase the number of slabs, but the slabs will
                         generally become larger.
         Returns:
             all_slabs_info  A list of 4-tuples containing:  `pymatgen.Structure`
-                            objects for surfaces we have enumerated, the Miller
+                            objects for slabs we have enumerated, the Miller
                             indices, floats for the shifts, and Booleans for "top".
         """
         bulk_struct = standardize_bulk(self.atoms)
@@ -218,7 +215,7 @@ def standardize_bulk(atoms: ase.Atoms):
 
 def flip_struct(struct: pymatgen.Structure):
     """
-    Flips an atoms object upside down. Normally used to flip surfaces.
+    Flips an atoms object upside down. Normally used to flip slabs.
 
     Arguments
     ---------

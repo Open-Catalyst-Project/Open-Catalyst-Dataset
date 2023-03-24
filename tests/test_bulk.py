@@ -24,11 +24,11 @@ class TestBulk:
         bulk = Bulk()
         assert bulk.atoms.get_chemical_formula() == "IrSn2"
 
-    def test_surface_enumeration(self):
-        precomputed_surfaces = self.bulk.get_precomputed_surfaces()
-        assert len(precomputed_surfaces) == 15
+    def test_slab_enumeration(self):
+        precomputed_slabs = self.bulk.get_precomputed_slabs()
+        assert len(precomputed_slabs) == 15
 
-        surfaces = self.bulk.compute_surfaces()
-        assert len(surfaces) == 15
+        slabs = self.bulk.compute_slabs()
+        assert len(slabs) == 15
 
-        assert [precomputed_surfaces[i] == surfaces[i] for i in range(15)]
+        assert [precomputed_slabs[i] == slabs[i] for i in range(15)]
