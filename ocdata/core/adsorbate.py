@@ -1,53 +1,51 @@
 import os
 import pickle
 
+import ase
 import numpy as np
+
+from ocdata.configs.paths import ADSORBATES_PKL_PATH
 
 
 class Adsorbate:
     """
-    This class handles all things with the adsorbate.
-    Selects one (either specified or random), and stores info as an object
+    Initializes an adsorbate object in one of 3 ways:
+    - Directly pass in an ase.Atoms object.
+    - Pass in index of adsorbate to select from adsorbate database.
+    - Randomly sample an adsorbate from adsorbate database.
 
-    Attributes
-    ----------
-    atoms : Atoms
-        actual atoms of the adsorbate
-    smiles : str
-        SMILES representation of the adsorbate
-    bond_indices : list
-        indices of the atoms meant to be bonded to the surface
-    adsorbate_sampling_str : str
-        string capturing the adsorbate index and total possible adsorbates
+    Arguments
+    ---------
+    adsorbate_atoms: ase.Atoms
+        Adsorbate structure.
+    adsorbate_id_from_db: int
+        Index of adsorbate to select if not doing a random sample.
+    adsorbate_db_path: str
+        Path to adsorbate database.
     """
 
-    def __init__(self, adsorbate_database, specified_index=None):
-        self.choose_adsorbate_pkl(adsorbate_database, specified_index)
+    def __init__(
+        self,
+        adsorbate_atoms: ase.Atoms = None,
+        adsorbate_id_from_db: int = None,
+        adsorbate_db_path: str = ADSORBATES_PKL_PATH,
+    ):
+        self.adsorbate_id_from_db = adsorbate_id_from_db
+        self.adsorbate_db_path = adsorbate_db_path
 
-    def choose_adsorbate_pkl(self, adsorbate_database, specified_index=None):
-        """
-        Chooses an adsorbate from our pkl based inverted index at random.
-
-        Args:
-            adsorbate_database: A string pointing to the a pkl file that contains
-                                an inverted index over different adsorbates.
-            specified_index: adsorbate index to choose instead of choosing a random one
-        Sets:
-            atoms                    `ase.Atoms` object of the adsorbate
-            smiles                   SMILES-formatted representation of the adsorbate
-            bond_indices             list of integers indicating the indices of the atoms in
-                                     the adsorbate that are meant to be bonded to the surface
-            adsorbate_sampling_str   Enum string specifying the sample, [index]
-            adsorbate_db_fname       filename denoting which version was used to sample
-        """
-        with open(adsorbate_database, "rb") as f:
-            inv_index = pickle.load(f)
-
-        if specified_index is not None:
-            element = specified_index
+        if adsorbate_atoms is not None:
+            self.atoms = adsorbate_atoms
+            self.smiles = None
+            self.binding_indices = None
+        elif adsorbate_id_from_db is not None:
+            adsorbate_db = pickle.load(open(adsorbate_db_path, "rb"))
+            self.atoms, self.smiles, self.binding_indices = adsorbate_db[
+                adsorbate_id_from_db
+            ]
         else:
-            element = np.random.choice(len(inv_index))
-
-        self.adsorbate_sampling_str = str(element)
-        self.atoms, self.smiles, self.bond_indices = inv_index[element]
-        self.adsorbate_db_fname = os.path.basename(adsorbate_database)
+            adsorbate_db = pickle.load(open(adsorbate_db_path, "rb"))
+            adsorbate_id_from_db = np.random.randint(len(adsorbate_db))
+            self.atoms, self.smiles, self.binding_indices = adsorbate_db[
+                adsorbate_id_from_db
+            ]
+            self.adsorbate_id_from_db = adsorbate_id_from_db
