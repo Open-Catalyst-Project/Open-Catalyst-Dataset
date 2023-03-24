@@ -15,14 +15,14 @@ def load_bulk(request):
 class TestBulk:
     def test_bulk_init_from_id(self):
         bulk = Bulk(bulk_id_from_db=0)
-        assert str(bulk.atoms.symbols) == "Re2"
+        assert bulk.atoms.get_chemical_formula() == "Re2"
 
     def test_bulk_init_random(self):
         random.seed(1)
         np.random.seed(1)
 
         bulk = Bulk()
-        assert str(bulk.atoms.symbols) == "Sn2Ir"
+        assert bulk.atoms.get_chemical_formula() == "IrSn2"
 
     def test_surface_enumeration(self):
         precomputed_surfaces = self.bulk.get_precomputed_surfaces()
