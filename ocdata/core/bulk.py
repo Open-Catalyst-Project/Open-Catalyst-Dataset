@@ -50,7 +50,7 @@ class Bulk:
         self.precomputed_slabs_path = precomputed_slabs_path
 
         if bulk_atoms is not None:
-            self.atoms = bulk_atoms
+            self.atoms = bulk_atoms.copy()
             self.mpid = None
         elif bulk_id_from_db is not None:
             bulk_db = pickle.load(open(bulk_db_path, "rb"))
@@ -76,6 +76,9 @@ class Bulk:
 
     def set_mpid(self, mpid: str):
         self.mpid = mpid
+
+    def set_bulk_id_from_db(self, bulk_id_from_db: int):
+        self.bulk_id_from_db = bulk_id_from_db
 
     def get_slabs(self):
         """

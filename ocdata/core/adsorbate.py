@@ -34,7 +34,7 @@ class Adsorbate:
         self.adsorbate_db_path = adsorbate_db_path
 
         if adsorbate_atoms is not None:
-            self.atoms = adsorbate_atoms
+            self.atoms = adsorbate_atoms.copy()
             self.smiles = None
             self.binding_indices = None
         elif adsorbate_id_from_db is not None:
