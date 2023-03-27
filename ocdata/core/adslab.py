@@ -27,7 +27,7 @@ class Adslab:
         self.structures = self.place_adsorbate_on_sites(
             self.sites, num_augmentations_per_site
         )
-        self.structures = self.filter_unreasonable_adslabs(self.structures)
+        self.structures = self.filter_unreasonable_structures(self.structures)
 
     def get_binding_sites(self, num_sites: int, added_z: int = 2):
         """
@@ -70,18 +70,18 @@ class Adslab:
         adsorbate_c.rotate(angles[2], v="z", center="COM")
 
         # Combine adsorbate and surface, and set tags correctly.
-        adslab = surface_c + adsorbate_c
+        structure = surface_c + adsorbate_c
         tags = [2] * len(adsorbate_c)
         final_tags = list(surface_c.get_tags()) + tags
-        adslab.set_tags(final_tags)
+        structure.set_tags(final_tags)
 
         # Set pbc and cell.
-        adslab.cell = surface_c.cell
+        structure.cell = surface_c.cell
         # Comment(@abhshkdz): Why don't we set PBC=True along all 3 axes? The
         # surface did have PBC along all 3 axes, right?
-        adslab.pbc = [True, True, False]
+        structure.pbc = [True, True, False]
 
-        return (site, adslab)
+        return (site, structure)
 
     def place_adsorbate_on_sites(
         self, sites: list, num_augmentations_per_site: int = 1
@@ -89,23 +89,23 @@ class Adslab:
         """
         Place the adsorbate at the given binding sites.
         """
-        adslabs = []
+        structures = []
         for site in sites:
             for _ in range(num_augmentations_per_site):
-                adslabs.append(self.place_adsorbate_on_site(site))
+                structures.append(self.place_adsorbate_on_site(site))
 
-        return adslabs
+        return structures
 
-    def filter_unreasonable_adslabs(self, adslabs: list):
+    def filter_unreasonable_structures(self, structures: list):
         """
         Filter out unreasonable adsorbate-surface systems.
         """
-        filtered_adslabs = []
-        for i in adslabs:
+        filtered_structures = []
+        for i in structures:
             site, adslab = i
-            if is_adslab_reasonable(adslab):
-                filtered_adslabs.append(i)
-        return filtered_adslabs
+            if is_adslab_structure_reasonable(adslab):
+                filtered_structures.append(i)
+        return filtered_structures
 
 
 def get_random_sites_on_triangle(
@@ -130,7 +130,7 @@ def get_random_sites_on_triangle(
     return [i for i in sites]  # Hack to return a list of np.ndarray.
 
 
-def is_adslab_reasonable(
+def is_adslab_structure_reasonable(
     adslab: ase.Atoms,
 ):
     """
