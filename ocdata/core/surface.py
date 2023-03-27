@@ -22,6 +22,13 @@ class Surface:
     - Pass in a Bulk object and a slab 4-tuple containing
     (atoms, miller, shift, top).
     - Pass in a Bulk object and randomly sample a surface.
+
+    Arguments
+    ---------
+    bulk: Bulk
+        Corresponding bulk object.
+    slab: tuple
+        4-tuple containing (atoms, miller, shift, top).
     """
 
     def __init__(
@@ -29,15 +36,6 @@ class Surface:
         bulk: Bulk,
         slab: tuple = None,
     ):
-        """
-        Initialize the surface object, tag atoms, and constrain the surface.
-
-        Args:
-            bulk_object: `Bulk()` object of the corresponding bulk
-            surface_info: tuple containing atoms, millers, shift, top
-            surface_index: index of surface out of all possible ones for the bulk
-            total_surfaces_possible: number of possible surfaces from this bulk
-        """
         self.bulk = bulk
         self.slab = slab
 
@@ -122,11 +120,15 @@ def tile_atoms(atoms, min_xy=MIN_XY):
     This function will repeat an atoms structure in the x and y direction until
     the x and y dimensions are at least as wide as the MIN_XY constant.
 
-    Args:
-        atoms   `ase.Atoms` object of the structure that you want to tile
-    Returns:
-        atoms_tiled     An `ase.Atoms` object that's just a tiled version of
-                        the `atoms` argument.
+    Arguments
+    ---------
+    atoms: ase.Atoms
+        The structure to tile.
+
+    Returns
+    -------
+    atoms_tiled: ase.Atoms
+        The tiled structure.
     """
     x_length = np.linalg.norm(atoms.cell[0])
     y_length = np.linalg.norm(atoms.cell[1])
@@ -149,12 +151,14 @@ def find_surface_atoms_by_height(surface_atoms):
     Angstroms of the heighest atom in the z-direction (or more accurately, the
     direction of the 3rd unit cell vector).
 
-    Arg:
-        surface_atoms   The surface where you are trying to find surface sites in
-                        `ase.Atoms` format
-    Returns:
-        tags            A list that contains the indices of
-                        the surface atoms
+    Arguments
+    ---------
+    surface_atoms: ase.Atoms
+
+    Returns
+    -------
+    tags: list
+        A list that contains the indices of the surface atoms.
     """
     unit_cell_height = np.linalg.norm(surface_atoms.cell[2])
     scaled_positions = surface_atoms.get_scaled_positions()
@@ -182,14 +186,18 @@ def find_surface_atoms_with_voronoi(bulk_atoms, surface_atoms):
     sites. One site has a coordination of 12 and another a coordination of 9.
     If a slab atom has a coordination of 10, we will consider it a bulk atom.
 
-    Args:
-        bulk_atoms      `ase.Atoms` of the bulk structure the surface was cut
-                        from.
-        surface_atoms   `ase.Atoms` of the surface
-    Returns:
-        tags    A list of 0's and 1's whose indices align with the atoms in
-                `surface_atoms`. 0's indicate a bulk atom and 1 indicates a
-                surface atom.
+    Arguments
+    ---------
+    bulk_atoms: ase.Atoms
+        The bulk structure that the surface was cut from.
+    surface_atoms: ase.Atoms
+        The surface structure.
+
+    Returns
+    -------
+    tags: list
+        A list of 0s and 1s whose indices align with the atoms in
+        `surface_atoms`. 0s indicate a bulk atom and 1 indicates a surface atom.
     """
     # Initializations
     surface_struct = AseAtomsAdaptor.get_structure(surface_atoms)
@@ -239,12 +247,16 @@ def calculate_coordination_of_bulk_atoms(bulk_atoms):
     their possible coordination numbers.
     For example: `bulk_cns = {'Pt': {3., 12.}, 'Pd': {12.}}`
 
-    Arg:
-        bulk_atoms  An `ase.Atoms` object of the bulk structure.
-    Returns:
-        bulk_cn_dict    A defaultdict whose keys are the elements within
-                        `bulk_atoms` and whose values are a set of integers of the
-                        coordination numbers of that element.
+    Arguments
+    ---------
+    bulk_atoms: ase.Atoms
+        The bulk structure.
+
+    Returns
+    -------
+    bulk_cn_dict: dict
+        A dictionary whose keys are the elements of the atoms and whose values
+        are their possible coordination numbers.
     """
     voronoi_nn = VoronoiNN(tol=0.1)  # 0.1 chosen for better detection
 

@@ -8,6 +8,21 @@ from ocdata.core import Adsorbate, Surface
 class Adslab:
     """
     Initializes an adsorbate-catalyst system for a given Adsorbate and Surface.
+
+    Arguments
+    ---------
+    surface: Surface
+        Surface object.
+    adsorbate: Adsorbate
+        Adsorbate object.
+    num_sites: int
+        Number of sites to sample.
+    num_augmentations_per_site: int
+        Number of augmentations of the adsorbate per site. Total number of
+        generated structures will be `num_sites` * `num_augmentations_per_site`.
+    added_z: int
+        Distance in Angstroms to add to the z-coordinate of the surface atoms
+        above the site for placing the adsorbate.
     """
 
     def __init__(
