@@ -5,7 +5,7 @@ import scipy
 from ocdata.core import Adsorbate, Surface
 
 
-class Structure:
+class Adslab:
     """
     Initializes an adsorbate-catalyst system for a given Adsorbate and Surface.
     """
@@ -24,10 +24,10 @@ class Structure:
         self.num_augmentations_per_site = num_augmentations_per_site
 
         self.sites = self.get_binding_sites(num_sites, added_z)
-        self.adslabs = self.place_adsorbate_on_sites(
+        self.structures = self.place_adsorbate_on_sites(
             self.sites, num_augmentations_per_site
         )
-        self.adslabs = self.filter_unreasonable_adslabs(self.adslabs)
+        self.structures = self.filter_unreasonable_adslabs(self.structures)
 
     def get_binding_sites(self, num_sites: int, added_z: int = 2):
         """
