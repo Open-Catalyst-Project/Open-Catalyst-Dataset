@@ -107,28 +107,14 @@ class Surface:
         mask = [True if atom.tag == 0 else False for atom in self.atoms]
         self.atoms.constraints += [FixAtoms(mask=mask)]
 
-    def get_bulk_dict(self):
-        """
-        Returns an organized dict for writing to files.
-        All info is already processed and stored in class variables.
-        """
-        self.overall_sampling_str = (
-            self.bulk_object.elem_sampling_str
-            + "_"
-            + self.bulk_object.bulk_sampling_str
-            + "_"
-            + self.surface_sampling_str
-        )
-        return {
-            "bulk_atomsobject": self.constrained_surface,
-            "bulk_metadata": (
-                self.bulk_object.mpid,
-                self.millers,
-                round(self.shift, 3),
-                self.top,
-            ),
-            "bulk_samplingstr": self.overall_sampling_str,
-        }
+    def __len__(self):
+        return len(self.atoms)
+
+    def __str__(self):
+        return f"Surface: {self.atoms.get_chemical_formula()}"
+
+    def __repr__(self):
+        return self.__str__()
 
 
 def tile_atoms(atoms, min_xy=MIN_XY):
@@ -153,7 +139,7 @@ def tile_atoms(atoms, min_xy=MIN_XY):
 
 def find_surface_atoms_by_height(surface_atoms):
     """
-    As discussed in the docstring for `_find_surface_atoms_with_voronoi`,
+    As discussed in the docstring for `find_surface_atoms_with_voronoi`,
     sometimes we might accidentally tag a surface atom as a bulk atom if there
     are multiple coordination environments for that atom type within the bulk.
     One heuristic that we use to address this is to simply figure out if an

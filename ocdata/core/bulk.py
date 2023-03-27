@@ -167,6 +167,15 @@ class Bulk:
 
         return all_slabs_info
 
+    def __len__(self):
+        return len(self.atoms)
+
+    def __str__(self):
+        return f"Bulk: {self.atoms.get_chemical_formula()}"
+
+    def __repr__(self):
+        return self.__str__()
+
 
 def is_2D_slab_reasonable(struct: pymatgen.Structure):
     """

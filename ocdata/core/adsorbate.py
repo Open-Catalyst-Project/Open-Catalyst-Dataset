@@ -49,3 +49,12 @@ class Adsorbate:
                 adsorbate_id_from_db
             ]
             self.adsorbate_id_from_db = adsorbate_id_from_db
+
+    def __len__(self):
+        return len(self.atoms)
+
+    def __str__(self):
+        return f"Adsorbate: {self.atoms.get_chemical_formula()}"
+
+    def __repr__(self):
+        return self.__str__()
