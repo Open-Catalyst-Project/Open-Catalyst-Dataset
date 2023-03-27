@@ -92,8 +92,6 @@ class Adslab:
 
         # Set pbc and cell.
         structure.cell = surface_c.cell
-        # Comment(@abhshkdz): Why don't we set PBC=True along all 3 axes? The
-        # surface did have PBC along all 3 axes, right?
         structure.pbc = [True, True, False]
 
         return (site, structure)
