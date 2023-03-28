@@ -1,8 +1,10 @@
 import ase
 import numpy as np
 import scipy
+from itertools import product
 
 from ocdata.core import Adsorbate, Surface
+from ase.data import atomic_numbers, covalent_radii
 
 
 class Adslab:
@@ -52,6 +54,7 @@ class Adslab:
             i for i, atom in enumerate(self.surface.atoms) if atom.tag == 1
         ]
         surface_atoms_pos = self.surface.atoms[surface_atoms_idx].positions
+        surface_atoms_elements = self.surface.atoms[surface_atoms_idx].chemical_symbols
 
         dt = scipy.spatial.Delaunay(surface_atoms_pos[:, :2])
         simplices = dt.simplices
@@ -59,24 +62,21 @@ class Adslab:
         all_sites = []
         for tri in simplices:
             triangle_positions = surface_atoms_pos[tri]
+            triangle_els = surface_atoms_elements[tri]
             sites = get_random_sites_on_triangle(
-                triangle_positions, num_sites_per_triangle, added_z
-            )
+                triangle_positions, triangle_els, num_sites_per_triangle
+            )  # Comment(@brookwander): - dont like this but I also dont like the alternatives - open to options!
             all_sites += sites
         np.random.shuffle(all_sites)
         return all_sites[:num_sites]
 
-    def place_adsorbate_on_site(self, site: np.ndarray):
+    def place_adsorbate_on_site(self, site_info: np.ndarray):
         """
         Place the adsorbate at the given binding site.
         """
+        simplex_elements, simplex_vertices, site = site_info
         adsorbate_c = self.adsorbate.atoms.copy()
         surface_c = self.surface.atoms.copy()
-
-        # Translate adsorbate to binding site.
-        com = adsorbate_c.get_center_of_mass()
-        translation_vector = site - com
-        adsorbate_c.translate(translation_vector)
 
         # Rotate adsorbate along x, y, z.
         angles = np.random.uniform(0, 360, 3)
@@ -84,7 +84,18 @@ class Adslab:
         adsorbate_c.rotate(angles[1], v="y", center="COM")
         adsorbate_c.rotate(angles[2], v="z", center="COM")
 
-        # Combine adsorbate and surface, and set tags correctly.
+        # Translate adsorbate to binding site.
+        com = adsorbate_c.get_center_of_mass()
+        translation_vector = site - com
+        adsorbate_c.translate(translation_vector)
+
+        # Translate the adsorbate by the scaled normal so it is proximate to the surface
+        scaled_normal = get_scaled_normal(
+            adsorbate_c, simplex_vertices, simplex_elements
+        )
+        adsorbate_c.translate(scaled_normal)
+
+        # Combine adsorbate and surface, and set tags correctly
         structure = surface_c + adsorbate_c
         tags = [2] * len(adsorbate_c)
         final_tags = list(surface_c.get_tags()) + tags
@@ -120,11 +131,117 @@ class Adslab:
                 filtered_structures.append(i)
         return filtered_structures
 
+    def _get_scaled_normal(
+        self, adsorbate_atoms, simplex_vertices, simplex_elements, tol=0.1
+    ):
+        """
+        Translate the adsorbate along the normal so that it is proximate to the surface:
+            1. Find the adsorbate atom - surface atom with the smallest distance (- radii)
+            2. Solve for the distance at which the spheres defined by the atomic radii
+                of the atoms in (1) first intersect. This will be done with the pythagorean
+                theorem, where we construct a right triangle with these sides:
+                    hypotenuse = radius_surface_atom + radius_adsorbate_atom
+                    adjacent = distance from adsorbate coordinate projected onto the plane to
+                        the surface atoms
+                    placement_distance = distance we want to get!
+            3. Calculate the scaled norm to be used for precise placement
+        ** Assumes that (1) is equivalent to finding the pair that would intersect first via translation.
+        This should be considered carefully. I think it should be true though.
+
+        Args:
+            adsorbate_atoms (np.ndarray): the vector normal to the plane defined by
+                the 3 surface atoms along which the placement was calculated
+            structure (ase.atoms.Atoms): the adsorbate surface configuration to be corrected.
+            tol (float): [Angstroms] cushion added on to the intersection distance.
+
+        Returns:
+            (ase.atoms.Atoms): The atoms with corrected adsorbate positions.
+        """
+        # (1)
+
+        ## temporarily give the adsorbate coordinates about the site, but far away
+        normal_vector = find_normal_to_plane(simplex_vertices)
+        scaled_normal_temporary = (
+            normal_vector * 5 / np.sqrt(normal_vector.dot(normal_vector))
+        )
+        adsorbate_c2 = adsorbate_atoms.copy()
+        adsorbate_c2.translate(scaled_normal_temporary)
+
+        ## See which atoms are closest
+        hypotenuse, closest_combo = self._find_closest_combo_and_min_distance(
+            simplex_vertices, simplex_elements, adsorbate_c2
+        )
+
+        # (2)
+        ## unpack coordinates to use
+        adsorbate_atom_position = adsorbate_c2.get_positions()[closest_combo[1]]
+        surface_atom_position = surface_atoms_in_simplex.get_positions()[
+            closest_combo[0]
+        ]
+
+        ## get the length of "adjacent"
+        projected_point = adsorbate_atom_position - np.cross(
+            np.dot(normal_vector, (adsorbate_atom_position - surface_atom_position)),
+            normal_vector,
+        )
+        adjacent = np.linalg.norm(projected_point - surface_atom_position)
+
+        ## calculate distance via pythagorean theorem
+        placement_distance = np.sqrt(hypotenuse**2 - adjacent**2) + tol
+
+        # (3)
+        scaled_vector = normal_vector * placement_distance / 5
+        return scaled_vector
+
+    def _find_closest_combo_and_min_distance(
+        simplex_vertices, simplex_elements, adsorbate_atoms
+    ):
+        """
+        Find the pair of surface and adsorbate atoms that are closest to one another.
+        Calculate the min distance between them (sum of atomic radii)
+
+        Args:
+            simplex_vertices (np.ndarray): the coordinated of each of the surface
+                atoms that define the placement simplex.
+            simplex_elements (np.ndarray): the chemical symbols of each of the
+                atoms in the simplex.
+            adsorbate_atoms (ase.atoms.Atoms): the adsorbate atoms object that has
+                been randomly placed far from the surface.
+
+        Returns:
+            (tuple): (simplex_idx, adsorbate_idx) of the most proximate atoms.
+            (float): the minimum distance between the most proximate atoms.
+
+        """
+        adsorbate_coordinates = adsorbate_atoms.get_positions()
+        adsorbate_elements = adsorbate_elements.get_chemical_symbols()
+
+        pairs = list(product(range(3), range(len(adsorbate))))
+        post_radial_distances = []
+
+        for combo in pairs:
+            total_distance = np.linalg.norm(
+                adsorbate_coordinates[combo[1]] - simplex_vertices[combo[0]]
+            )
+            post_radial_distance = (
+                total_distance
+                - covalent_radii[atomic_numbers[simplex_elements[combo[0]]]]
+                - covalent_radii[atomic_numbers[adsorbate_elements[combo[1]]]]
+            )
+            post_radial_distances.append(post_radial_distance)
+
+        closest_combo = pairs[post_radial_distances.index(min(post_radial_distances))]
+        min_distance = (
+            covalent_radii[atomic_numbers[simplex_elements[closest_combo[0]]]]
+            + covalent_radii[atomic_numbers[adsorbate_elements[closest_combo[1]]]]
+        )
+        return closest_combo, min_distance
+
 
 def get_random_sites_on_triangle(
     vertices: np.ndarray,
+    elements: np.ndarray,
     num_sites: int = 10,
-    added_z: int = 0,
 ):
     """
     Sample `num_sites` random sites uniformly on a given 3D triangle.
@@ -138,9 +255,7 @@ def get_random_sites_on_triangle(
         + r1_sqrt * (1 - r2) * vertices[1]
         + r1_sqrt * r2 * vertices[2]
     )
-    # Comment(@abhshkdz): Okay to assume z is normal to the surface?
-    sites[:, 2] += added_z
-    return [i for i in sites]  # Hack to return a list of np.ndarray.
+    return [(elements, vertices, i) for i in sites]
 
 
 def is_adslab_structure_reasonable(
@@ -151,3 +266,19 @@ def is_adslab_structure_reasonable(
     """
     # Comment(@abhshkdz): This is a placeholder for now.
     return True
+
+
+def find_normal_to_plane(vertices):
+    """
+    Get the normal vector to the plane defined by any 3 points.
+
+    Args:
+        vertices (list): the points about which to construct a plane
+
+    Returns:
+        (np.ndarray): normal vector
+    """
+    p1, p2, p3 = vertices
+    v1 = p2 - p1
+    v2 = p3 - p1
+    return np.cross(v1, v2)
