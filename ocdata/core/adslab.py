@@ -74,7 +74,9 @@ class Adslab:
         np.random.shuffle(all_sites)
         return all_sites[:num_sites]
 
-    def place_adsorbate_on_site(self, site_info: np.ndarray):
+    def place_adsorbate_on_site(
+        self, site_info: np.ndarray, proximate_placement: bool = False
+    ):
         """
         Place the adsorbate at the given binding site.
         """
@@ -94,10 +96,13 @@ class Adslab:
         adsorbate_c.translate(translation_vector)
 
         # Translate the adsorbate by the scaled normal so it is proximate to the surface
-        scaled_normal = self._get_scaled_normal(
-            adsorbate_c, simplex_vertices, simplex_elements
-        )
-        adsorbate_c.translate(scaled_normal)
+        if proximate_placement:
+            scaled_normal = self._get_scaled_normal(
+                adsorbate_c, simplex_vertices, simplex_elements
+            )
+            adsorbate_c.translate(scaled_normal)
+        else:
+            adsorbate_c.translate(np.array([0, 0, 2]))
 
         # Combine adsorbate and surface, and set tags correctly
         structure = surface_c + adsorbate_c
