@@ -54,7 +54,9 @@ class Adslab:
             i for i, atom in enumerate(self.surface.atoms) if atom.tag == 1
         ]
         surface_atoms_pos = self.surface.atoms[surface_atoms_idx].positions
-        surface_atoms_elements = self.surface.atoms[surface_atoms_idx].chemical_symbols
+        surface_atoms_elements = self.surface.atoms[
+            surface_atoms_idx
+        ].get_chemical_symbols()
 
         dt = scipy.spatial.Delaunay(surface_atoms_pos[:, :2])
         simplices = dt.simplices
@@ -62,7 +64,9 @@ class Adslab:
         all_sites = []
         for tri in simplices:
             triangle_positions = surface_atoms_pos[tri]
-            triangle_els = surface_atoms_elements[tri]
+            triangle_els = [
+                el for idx, el in enumerate(surface_atoms_elements) if idx in tri
+            ]
             sites = get_random_sites_on_triangle(
                 triangle_positions, triangle_els, num_sites_per_triangle
             )  # Comment(@brookwander): - dont like this but I also dont like the alternatives - open to options!
@@ -90,7 +94,7 @@ class Adslab:
         adsorbate_c.translate(translation_vector)
 
         # Translate the adsorbate by the scaled normal so it is proximate to the surface
-        scaled_normal = get_scaled_normal(
+        scaled_normal = self._get_scaled_normal(
             adsorbate_c, simplex_vertices, simplex_elements
         )
         adsorbate_c.translate(scaled_normal)
@@ -168,22 +172,23 @@ class Adslab:
         adsorbate_c2.translate(scaled_normal_temporary)
 
         ## See which atoms are closest
-        hypotenuse, closest_combo = self._find_closest_combo_and_min_distance(
+        closest_combo, hypotenuse = self._find_closest_combo_and_min_distance(
             simplex_vertices, simplex_elements, adsorbate_c2
         )
 
         # (2)
         ## unpack coordinates to use
         adsorbate_atom_position = adsorbate_c2.get_positions()[closest_combo[1]]
-        surface_atom_position = surface_atoms_in_simplex.get_positions()[
-            closest_combo[0]
-        ]
+        surface_atom_position = simplex_vertices[closest_combo[0]]
 
         ## get the length of "adjacent"
-        projected_point = adsorbate_atom_position - np.cross(
-            np.dot(normal_vector, (adsorbate_atom_position - surface_atom_position)),
-            normal_vector,
+        v_ = adsorbate_atom_position - surface_atom_position
+        projected_point = surface_atom_position + (
+            v_
+            - (np.dot(v_, normal_vector) / np.linalg.norm(normal_vector) ** 2)
+            * normal_vector
         )
+
         adjacent = np.linalg.norm(projected_point - surface_atom_position)
 
         ## calculate distance via pythagorean theorem
@@ -194,7 +199,7 @@ class Adslab:
         return scaled_vector
 
     def _find_closest_combo_and_min_distance(
-        simplex_vertices, simplex_elements, adsorbate_atoms
+        self, simplex_vertices, simplex_elements, adsorbate_atoms
     ):
         """
         Find the pair of surface and adsorbate atoms that are closest to one another.
@@ -214,9 +219,9 @@ class Adslab:
 
         """
         adsorbate_coordinates = adsorbate_atoms.get_positions()
-        adsorbate_elements = adsorbate_elements.get_chemical_symbols()
+        adsorbate_elements = adsorbate_atoms.get_chemical_symbols()
 
-        pairs = list(product(range(3), range(len(adsorbate))))
+        pairs = list(product(range(3), range(len(adsorbate_atoms))))
         post_radial_distances = []
 
         for combo in pairs:
