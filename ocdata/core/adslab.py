@@ -22,9 +22,11 @@ class Adslab:
     num_augmentations_per_site: int
         Number of augmentations of the adsorbate per site. Total number of
         generated structures will be `num_sites` * `num_augmentations_per_site`.
-    added_z: int
-        Distance in Angstroms to add to the z-coordinate of the surface atoms
-        above the site for placing the adsorbate.
+    height_tolerance: int
+        Distance in Angstroms to add to the height of placement. If = 0, the
+        adsorbate would be placed so the spheres defined by the covalent radius of
+        its most proximate atom and the covalent radius of the most proximate
+        surface atom touch at exactly 1 point.
     """
 
     def __init__(
@@ -33,20 +35,22 @@ class Adslab:
         adsorbate: Adsorbate,
         num_sites: int = 100,
         num_augmentations_per_site: int = 1,
-        added_z: int = 2,
+        height_tolerance: float = 0.1,
     ):
         self.surface = surface
         self.adsorbate = adsorbate
         self.num_sites = num_sites
         self.num_augmentations_per_site = num_augmentations_per_site
 
-        self.sites = self.get_binding_sites(num_sites, added_z)
+        self.sites = self.get_binding_sites(num_sites)
         self.structures = self.place_adsorbate_on_sites(
-            self.sites, num_augmentations_per_site
+            self.sites,
+            num_augmentations_per_site,
+            height_tolerance,
         )
         self.structures = self.filter_unreasonable_structures(self.structures)
 
-    def get_binding_sites(self, num_sites: int, added_z: int = 2):
+    def get_binding_sites(self, num_sites: int):
         """
         Returns `num_sites` sites given the surface atoms' positions.
         """
@@ -68,19 +72,21 @@ class Adslab:
                 el for idx, el in enumerate(surface_atoms_elements) if idx in tri
             ]
             sites = get_random_sites_on_triangle(
-                triangle_positions, triangle_els, num_sites_per_triangle
-            )  # Comment(@brookwander): - dont like this but I also dont like the alternatives - open to options!
+                triangle_positions, num_sites_per_triangle
+            )
             all_sites += sites
         np.random.shuffle(all_sites)
         return all_sites[:num_sites]
 
     def place_adsorbate_on_site(
-        self, site_info: np.ndarray, proximate_placement: bool = False
+        self,
+        site_info: np.ndarray,
+        height_tolerance: float = 0.1,
     ):
         """
         Place the adsorbate at the given binding site.
         """
-        simplex_elements, simplex_vertices, site = site_info
+        simplex_vertices, site = site_info
         adsorbate_c = self.adsorbate.atoms.copy()
         surface_c = self.surface.atoms.copy()
 
@@ -96,13 +102,10 @@ class Adslab:
         adsorbate_c.translate(translation_vector)
 
         # Translate the adsorbate by the scaled normal so it is proximate to the surface
-        if proximate_placement:
-            scaled_normal = self._get_scaled_normal(
-                adsorbate_c, simplex_vertices, simplex_elements
-            )
-            adsorbate_c.translate(scaled_normal)
-        else:
-            adsorbate_c.translate(np.array([0, 0, 2]))
+        scaled_normal = self._get_scaled_normal(
+            simplex_vertices, adsorbate_c, height_tolerance
+        )
+        adsorbate_c.translate(scaled_normal)
 
         # Combine adsorbate and surface, and set tags correctly
         structure = surface_c + adsorbate_c
@@ -117,7 +120,10 @@ class Adslab:
         return (site, structure)
 
     def place_adsorbate_on_sites(
-        self, sites: list, num_augmentations_per_site: int = 1
+        self,
+        sites: list,
+        num_augmentations_per_site: int = 1,
+        height_tolerance: float = 0.1,
     ):
         """
         Place the adsorbate at the given binding sites.
@@ -125,7 +131,7 @@ class Adslab:
         structures = []
         for site in sites:
             for _ in range(num_augmentations_per_site):
-                structures.append(self.place_adsorbate_on_site(site))
+                structures.append(self.place_adsorbate_on_site(site, height_tolerance))
 
         return structures
 
@@ -141,7 +147,10 @@ class Adslab:
         return filtered_structures
 
     def _get_scaled_normal(
-        self, adsorbate_atoms, simplex_vertices, simplex_elements, tol=0.1
+        self,
+        simplex_vertices,
+        adsorbate_atoms,
+        height_tolerance: float = 0.1,
     ):
         """
         Translate the adsorbate along the normal so that it is proximate to the surface:
@@ -170,6 +179,8 @@ class Adslab:
 
         ## temporarily give the adsorbate coordinates about the site, but far away
         normal_vector = find_normal_to_plane(simplex_vertices)
+        if normal_vector[2] < 0:
+            normal_vector = normal_vector * -1
         scaled_normal_temporary = (
             normal_vector * 5 / np.sqrt(normal_vector.dot(normal_vector))
         )
@@ -177,14 +188,17 @@ class Adslab:
         adsorbate_c2.translate(scaled_normal_temporary)
 
         ## See which atoms are closest
+        surface_atoms = self.surface.atoms[
+            [idx for idx, tag in enumerate(self.surface.atoms.get_tags()) if tag == 1]
+        ]
         closest_combo, hypotenuse = self._find_closest_combo_and_min_distance(
-            simplex_vertices, simplex_elements, adsorbate_c2
+            adsorbate_c2, surface_atoms
         )
 
         # (2)
         ## unpack coordinates to use
         adsorbate_atom_position = adsorbate_c2.get_positions()[closest_combo[1]]
-        surface_atom_position = simplex_vertices[closest_combo[0]]
+        surface_atom_position = surface_atoms.get_positions()[closest_combo[0]]
 
         ## get the length of "adjacent"
         v_ = adsorbate_atom_position - surface_atom_position
@@ -197,52 +211,52 @@ class Adslab:
         adjacent = np.linalg.norm(projected_point - surface_atom_position)
 
         ## calculate distance via pythagorean theorem
-        placement_distance = np.sqrt(hypotenuse**2 - adjacent**2) + tol
+        placement_distance = np.sqrt(hypotenuse**2 - adjacent**2) + height_tolerance
 
         # (3)
         scaled_vector = normal_vector * placement_distance / 5
         return scaled_vector
 
-    def _find_closest_combo_and_min_distance(
-        self, simplex_vertices, simplex_elements, adsorbate_atoms
-    ):
+    def _find_closest_combo_and_min_distance(self, adsorbate_atoms, surface_atoms):
         """
         Find the pair of surface and adsorbate atoms that are closest to one another.
         Calculate the min distance between them (sum of atomic radii)
 
         Args:
-            simplex_vertices (np.ndarray): the coordinated of each of the surface
-                atoms that define the placement simplex.
-            simplex_elements (np.ndarray): the chemical symbols of each of the
-                atoms in the simplex.
             adsorbate_atoms (ase.atoms.Atoms): the adsorbate atoms object that has
                 been randomly placed far from the surface.
 
+
         Returns:
-            (tuple): (simplex_idx, adsorbate_idx) of the most proximate atoms.
+            (tuple): (surface_idx, adsorbate_idx) of the most proximate atoms.
             (float): the minimum distance between the most proximate atoms.
 
         """
         adsorbate_coordinates = adsorbate_atoms.get_positions()
         adsorbate_elements = adsorbate_atoms.get_chemical_symbols()
 
-        pairs = list(product(range(3), range(len(adsorbate_atoms))))
+        surface_coordinates = surface_atoms.get_positions()
+        surface_elements = surface_atoms.get_chemical_symbols()
+
+        pairs = list(
+            product(range(len(surface_atoms)), range(len(adsorbate_atoms)))
+        )  # Comment(@brookwander): opportunity to reduce cost here by only looking at atoms proximate to the site.
         post_radial_distances = []
 
         for combo in pairs:
             total_distance = np.linalg.norm(
-                adsorbate_coordinates[combo[1]] - simplex_vertices[combo[0]]
+                adsorbate_coordinates[combo[1]] - surface_coordinates[combo[0]]
             )
             post_radial_distance = (
                 total_distance
-                - covalent_radii[atomic_numbers[simplex_elements[combo[0]]]]
+                - covalent_radii[atomic_numbers[surface_elements[combo[0]]]]
                 - covalent_radii[atomic_numbers[adsorbate_elements[combo[1]]]]
             )
             post_radial_distances.append(post_radial_distance)
 
         closest_combo = pairs[post_radial_distances.index(min(post_radial_distances))]
         min_distance = (
-            covalent_radii[atomic_numbers[simplex_elements[closest_combo[0]]]]
+            covalent_radii[atomic_numbers[surface_elements[closest_combo[0]]]]
             + covalent_radii[atomic_numbers[adsorbate_elements[closest_combo[1]]]]
         )
         return closest_combo, min_distance
@@ -250,7 +264,6 @@ class Adslab:
 
 def get_random_sites_on_triangle(
     vertices: np.ndarray,
-    elements: np.ndarray,
     num_sites: int = 10,
 ):
     """
@@ -265,7 +278,7 @@ def get_random_sites_on_triangle(
         + r1_sqrt * (1 - r2) * vertices[1]
         + r1_sqrt * r2 * vertices[2]
     )
-    return [(elements, vertices, i) for i in sites]
+    return [(vertices, i) for i in sites]
 
 
 def is_adslab_structure_reasonable(
