@@ -5,6 +5,7 @@ from itertools import product
 
 from ocdata.core import Adsorbate, Surface
 from ase.data import atomic_numbers, covalent_radii
+import copy
 
 
 class Adslab:
@@ -22,11 +23,9 @@ class Adslab:
     num_augmentations_per_site: int
         Number of augmentations of the adsorbate per site. Total number of
         generated structures will be `num_sites` * `num_augmentations_per_site`.
-    height_tolerance: int
-        Distance in Angstroms to add to the height of placement. If = 0, the
-        adsorbate would be placed so the spheres defined by the covalent radius of
-        its most proximate atom and the covalent radius of the most proximate
-        surface atom touch at exactly 1 point.
+    height_adjustment: float
+        Distance in Angstroms to add to the height of placement incrementally
+        until there is no atomic overlap.
     """
 
     def __init__(
@@ -35,7 +34,7 @@ class Adslab:
         adsorbate: Adsorbate,
         num_sites: int = 100,
         num_augmentations_per_site: int = 1,
-        height_tolerance: float = 0.1,
+        height_adjustment: float = 0.1,
     ):
         self.surface = surface
         self.adsorbate = adsorbate
@@ -46,7 +45,7 @@ class Adslab:
         self.structures = self.place_adsorbate_on_sites(
             self.sites,
             num_augmentations_per_site,
-            height_tolerance,
+            height_adjustment,
         )
         self.structures = self.filter_unreasonable_structures(self.structures)
 
@@ -80,13 +79,12 @@ class Adslab:
 
     def place_adsorbate_on_site(
         self,
-        site_info: np.ndarray,
-        height_tolerance: float = 0.1,
+        site: np.ndarray,
+        height_adjustment: float = 0.1,
     ):
         """
         Place the adsorbate at the given binding site.
         """
-        simplex_vertices, site = site_info
         adsorbate_c = self.adsorbate.atoms.copy()
         surface_c = self.surface.atoms.copy()
 
@@ -101,11 +99,8 @@ class Adslab:
         translation_vector = site - com
         adsorbate_c.translate(translation_vector)
 
-        # Translate the adsorbate by the scaled normal so it is proximate to the surface
-        scaled_normal = self._get_scaled_normal(
-            simplex_vertices, adsorbate_c, height_tolerance
-        )
-        adsorbate_c.translate(scaled_normal)
+        # Translate the adsorbate by the scaled normal until it is proximate to the surface
+        self._reposition_adsorbate(adsorbate_c, height_adjustment)
 
         # Combine adsorbate and surface, and set tags correctly
         structure = surface_c + adsorbate_c
@@ -123,7 +118,7 @@ class Adslab:
         self,
         sites: list,
         num_augmentations_per_site: int = 1,
-        height_tolerance: float = 0.1,
+        height_adjustment: float = 0.1,
     ):
         """
         Place the adsorbate at the given binding sites.
@@ -131,7 +126,7 @@ class Adslab:
         structures = []
         for site in sites:
             for _ in range(num_augmentations_per_site):
-                structures.append(self.place_adsorbate_on_site(site, height_tolerance))
+                structures.append(self.place_adsorbate_on_site(site, height_adjustment))
 
         return structures
 
@@ -146,120 +141,39 @@ class Adslab:
                 filtered_structures.append(i)
         return filtered_structures
 
-    def _get_scaled_normal(
+    def _reposition_adsorbate(
         self,
-        simplex_vertices,
-        adsorbate_atoms,
-        height_tolerance: float = 0.1,
+        adsorbate_atoms: ase.atoms.Atoms,
+        height_adjustment: float = 0.1,
     ):
         """
-        Translate the adsorbate along the normal so that it is proximate to the surface:
-            1. Find the adsorbate atom - surface atom with the smallest distance (- radii)
-            2. Solve for the distance at which the spheres defined by the atomic radii
-                of the atoms in (1) first intersect. This will be done with the pythagorean
-                theorem, where we construct a right triangle with these sides:
-                    hypotenuse = radius_surface_atom + radius_adsorbate_atom
-                    adjacent = distance from adsorbate coordinate projected onto the plane to
-                        the surface atoms
-                    placement_distance = distance we want to get!
-            3. Calculate the scaled norm to be used for precise placement
-        ** Assumes that (1) is equivalent to finding the pair that would intersect first via translation.
-        This should be considered carefully. I think it should be true though.
+        Translate the adsorbate along the surface normal so that it is proximate
+        to the surface but there is no atomic overlap by iteratively moving the
+        adsorbate away from the surface, along its normal, until there is no
+        more overlap.
 
         Args:
-            adsorbate_atoms (np.ndarray): the vector normal to the plane defined by
-                the 3 surface atoms along which the placement was calculated
-            structure (ase.atoms.Atoms): the adsorbate surface configuration to be corrected.
-            tol (float): [Angstroms] cushion added on to the intersection distance.
-
-        Returns:
-            (ase.atoms.Atoms): The atoms with corrected adsorbate positions.
+            adsorbate_atoms (ase.atoms.Atoms): the adsorbate atoms copy which
+                is being manipulated during placement
+            height_adjustment (float): [Agstroms] the added distance at each
+                translation of the adsorbate away from the surface
         """
-        # (1)
-
-        ## temporarily give the adsorbate coordinates about the site, but far away
-        normal_vector = find_normal_to_plane(simplex_vertices)
-        if normal_vector[2] < 0:
-            normal_vector = normal_vector * -1
-        scaled_normal_temporary = (
-            normal_vector * 5 / np.sqrt(normal_vector.dot(normal_vector))
+        surface_normal = self.surface.atoms.cell[2].copy()
+        scaled_surface_normal = (
+            surface_normal * height_adjustment / np.linalg.norm(surface_normal)
         )
-        adsorbate_c2 = adsorbate_atoms.copy()
-        adsorbate_c2.translate(scaled_normal_temporary)
 
         ## See which atoms are closest
         surface_atoms = self.surface.atoms[
             [idx for idx, tag in enumerate(self.surface.atoms.get_tags()) if tag == 1]
         ]
-        closest_combo, hypotenuse = self._find_closest_combo_and_min_distance(
-            adsorbate_c2, surface_atoms
-        )
+        surface_atoms_tiled = custom_tile_atoms(surface_atoms)
 
-        # (2)
-        ## unpack coordinates to use
-        adsorbate_atom_position = adsorbate_c2.get_positions()[closest_combo[1]]
-        surface_atom_position = surface_atoms.get_positions()[closest_combo[0]]
-
-        ## get the length of "adjacent"
-        v_ = adsorbate_atom_position - surface_atom_position
-        projected_point = surface_atom_position + (
-            v_
-            - (np.dot(v_, normal_vector) / np.linalg.norm(normal_vector) ** 2)
-            * normal_vector
-        )
-
-        adjacent = np.linalg.norm(projected_point - surface_atom_position)
-
-        ## calculate distance via pythagorean theorem
-        placement_distance = np.sqrt(hypotenuse**2 - adjacent**2) + height_tolerance
-
-        # (3)
-        scaled_vector = normal_vector * placement_distance / 5
-        return scaled_vector
-
-    def _find_closest_combo_and_min_distance(self, adsorbate_atoms, surface_atoms):
-        """
-        Find the pair of surface and adsorbate atoms that are closest to one another.
-        Calculate the min distance between them (sum of atomic radii)
-
-        Args:
-            adsorbate_atoms (ase.atoms.Atoms): the adsorbate atoms object that has
-                been randomly placed far from the surface.
-
-
-        Returns:
-            (tuple): (surface_idx, adsorbate_idx) of the most proximate atoms.
-            (float): the minimum distance between the most proximate atoms.
-
-        """
-        adsorbate_coordinates = adsorbate_atoms.get_positions()
-        adsorbate_elements = adsorbate_atoms.get_chemical_symbols()
-
-        surface_coordinates = surface_atoms.get_positions()
-        surface_elements = surface_atoms.get_chemical_symbols()
-
-        pairs = list(
-            product(range(len(surface_atoms)), range(len(adsorbate_atoms)))
-        )  # Comment(@brookwander): opportunity to reduce cost here by only looking at atoms proximate to the site.
-        post_radial_distances = []
-
-        for combo in pairs:
-            total_distance = np.linalg.norm(
-                adsorbate_coordinates[combo[1]] - surface_coordinates[combo[0]]
-            )
-            post_radial_distance = (
-                total_distance
-                - covalent_radii[atomic_numbers[surface_elements[combo[0]]]]
-                - covalent_radii[atomic_numbers[adsorbate_elements[combo[1]]]]
-            )
-            post_radial_distances.append(post_radial_distance)
-
-        closest_combo = pairs[post_radial_distances.index(min(post_radial_distances))]
-        min_distance = (
-            covalent_radii[atomic_numbers[surface_elements[closest_combo[0]]]]
-            + covalent_radii[atomic_numbers[adsorbate_elements[closest_combo[1]]]]
-        )
-        return closest_combo, min_distance
+        total_distance_traversed = 0
+        overlap_exists = there_is_overlap(adsorbate_atoms, surface_atoms_tiled)
+        while overlap_exists:
+            adsorbate_atoms.translate(scaled_surface_normal)
+            overlap_exists = there_is_overlap(adsorbate_atoms, surface_atoms_tiled)
 
 
 def get_random_sites_on_triangle(
@@ -278,7 +192,7 @@ def get_random_sites_on_triangle(
         + r1_sqrt * (1 - r2) * vertices[1]
         + r1_sqrt * r2 * vertices[2]
     )
-    return [(vertices, i) for i in sites]
+    return [i for i in sites]
 
 
 def is_adslab_structure_reasonable(
@@ -291,17 +205,67 @@ def is_adslab_structure_reasonable(
     return True
 
 
-def find_normal_to_plane(vertices):
+def custom_tile_atoms(atoms: ase.atoms.Atoms):
     """
-    Get the normal vector to the plane defined by any 3 points.
+    Tile the atoms so that the center tile has the indices and positions of the
+    untiled structure.
 
     Args:
-        vertices (list): the points about which to construct a plane
+        atoms (ase.atoms.Atoms): the atoms object to be tiled
+
+    Return:
+        (ase.atoms.Atoms): the tiled atoms which has been repeated 3 times in
+            the x and y directions but maintains the original indices on the central
+            unit cell.
+    """
+    vectors = [
+        v for v in atoms.cell if ((round(v[0], 3) != 0) or (round(v[1], 3 != 0)))
+    ]
+    repeats = list(product([-1, 0, 1], repeat=2))
+    repeats.remove((0, 0))
+    new_atoms = copy.deepcopy(atoms)
+    for repeat in repeats:
+        atoms_shifted = copy.deepcopy(atoms)
+        atoms_shifted.set_positions(
+            atoms.get_positions() + vectors[0] * repeat[0] + vectors[1] * repeat[1]
+        )
+        new_atoms += atoms_shifted
+    return new_atoms
+
+
+def there_is_overlap(
+    adsorbate_atoms: ase.atoms.Atoms, surface_atoms_tiled: ase.atoms.Atoms
+):
+    """
+    Check to see if there is any atomic overlap between surface atoms
+    and adsorbate atoms.
+
+    Args:
+        adsorbate_atoms (ase.atoms.Atoms): the adsorbate atoms copy which
+            is being manipulated during placement
+        surface_atoms_tiled: a tiled copy of the surface atoms from
+            `custom_tile_atoms`
 
     Returns:
-        (np.ndarray): normal vector
+        (bool): True if there is atomic overlap, otherwise False
     """
-    p1, p2, p3 = vertices
-    v1 = p2 - p1
-    v2 = p3 - p1
-    return np.cross(v1, v2)
+    adsorbate_coordinates = adsorbate_atoms.get_positions()
+    adsorbate_elements = adsorbate_atoms.get_chemical_symbols()
+
+    surface_coordinates = surface_atoms_tiled.get_positions()
+    surface_elements = surface_atoms_tiled.get_chemical_symbols()
+
+    pairs = list(product(range(len(surface_atoms_tiled)), range(len(adsorbate_atoms))))
+    unintersected_post_radial_distances = []
+
+    for combo in pairs:
+        total_distance = np.linalg.norm(
+            adsorbate_coordinates[combo[1]] - surface_coordinates[combo[0]]
+        )
+        post_radial_distance = (
+            total_distance
+            - covalent_radii[atomic_numbers[surface_elements[combo[0]]]]
+            - covalent_radii[atomic_numbers[adsorbate_elements[combo[1]]]]
+        )
+        unintersected_post_radial_distances.append(post_radial_distance >= 0)
+    return not all(unintersected_post_radial_distances)
