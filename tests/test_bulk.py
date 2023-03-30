@@ -29,6 +29,7 @@ class TestBulk:
 
     def test_unique_slab_enumeration(self):
         slabs = self.bulk.compute_slabs()
+        cwd = os.getcwd()
 
         seen = []
         for slab in slabs:
@@ -38,7 +39,7 @@ class TestBulk:
         # pymatgen-2023.1.20 + ase 3.22.1
         assert len(slabs) == 15
 
-        with open(f"{self.idx}.pkl", "wb") as f:
+        with open(f"{os.path.join(cwd, str(self.idx))}.pkl", "wb") as f:
             pickle.dump(slabs, f)
 
     def test_precomputed_slab(self):
