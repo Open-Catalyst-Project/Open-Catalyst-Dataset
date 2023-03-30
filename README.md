@@ -1,3 +1,5 @@
+[![CircleCI](https://dl.circleci.com/status-badge/img/gh/Open-Catalyst-Project/Open-Catalyst-Dataset/tree/refactor-v2.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/Open-Catalyst-Project/Open-Catalyst-Dataset/tree/refactor-v2)
+
 # Open-Catalyst-Dataset
 
 This repository hosts the input generation workflow used in the Open Catalyst Project.
