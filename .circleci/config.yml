@@ -33,7 +33,7 @@ commands:
               source /home/circleci/miniconda/etc/profile.d/conda.sh
               conda activate vaspenv
               pip install pymatgen==2023.1.20 ase==3.22.1 black==22.3.0
-              pip install pytest-cov==4.0.0 pre-commit=2.10.*
+              pip install pytest-cov==4.0.0 pre-commit==2.10.*
             fi
       - save_cache:
           paths:
