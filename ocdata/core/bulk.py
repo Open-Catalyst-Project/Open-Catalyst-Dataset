@@ -43,7 +43,7 @@ class Bulk:
         bulk_id_from_db: int = None,
         # mp_id = None,
         bulk_db_path: str = BULK_PKL_PATH,
-        precomputed_slabs_path: str = PRECOMPUTED_SLABS_DIR_PATH,
+        precomputed_slabs_path: str = None,
     ):
         self.bulk_id_from_db = bulk_id_from_db
         self.bulk_db_path = bulk_db_path
