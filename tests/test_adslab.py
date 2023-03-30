@@ -21,12 +21,16 @@ class TestAdslab:
 
         surface = Surface(self.bulk)
         adslab = Adslab(surface, self.adsorbate, num_sites=100)
-        assert len(adslab.structures) == 100
+        assert (
+            len(adslab.structures) == 100
+        ), f"Insufficient number of structures. Expected 100, got {len(adslab.structures)}"
 
         sites = [
             "%.04f_%.04f_%.04f" % (i[0][0], i[0][1], i[0][2]) for i in adslab.structures
         ]
-        assert len(set(sites)) == 100
+        assert (
+            len(set(sites)) == 100
+        ), f"Insufficient number of sites. Expected 100, got {len(set(sites))}"
 
         assert np.all(
             np.isclose(
@@ -56,21 +60,21 @@ class TestAdslab:
         ]
         assert len(set(sites)) == 1
 
-    def test_added_z(self):
+    def test_height_adjustment(self):
         """
-        Test that the adsorbate atoms are all above `added_z`.
+        Test that the adsorbate atoms are all above `height_adjustment`.
 
         Comment(@abhshkdz): This test is very loose and should be improved.
         All we're currently checking is that the adsorbate atoms are above
-        `added_z` and not below it. A tighter version of the check would be
+        `height_adjustment` and not below it. A tighter version of the check would be
         to make sure that the gap between the adsorbate atoms and the surface
-        is at least `added_z`.
+        is at least `height_adjustment`.
         """
         random.seed(1)
         np.random.seed(1)
 
         surface = Surface(self.bulk)
-        adslab = Adslab(surface, self.adsorbate, num_sites=100, added_z=2.0)
+        adslab = Adslab(surface, self.adsorbate, num_sites=100, height_adjustment=2.0)
         assert len(adslab.structures) == 100
 
         min_z = []
@@ -81,7 +85,7 @@ class TestAdslab:
 
         assert np.all(np.array(min_z) > 2.0)
 
-        adslab = Adslab(surface, self.adsorbate, num_sites=100, added_z=20.0)
+        adslab = Adslab(surface, self.adsorbate, num_sites=100, height_adjustment=20.0)
         min_z = []
         for i in adslab.structures:
             ads_idx = i[1].get_tags() == 2
