@@ -15,7 +15,7 @@ commands:
     steps:
       - checkout
       - restore_cache:
-          key: conda-ubuntu-{{ checksum ".circleci/config.yml" }}-{{ checksum "env.yml" }}
+          key: conda-ubuntu-{{ checksum ".circleci/config.yml" }}
       - run:
           name: Install conda and environment
           command: |
@@ -38,7 +38,7 @@ commands:
       - save_cache:
           paths:
             - /home/circleci/miniconda
-          key: conda-ubuntu-{{ checksum ".circleci/config.yml" }}-{{ checksum "env.yml" }}
+          key: conda-ubuntu-{{ checksum ".circleci/config.yml" }}
 
 jobs:
   python_lint:
