@@ -2,6 +2,7 @@ import random
 
 import numpy as np
 import pytest
+from ase.data import covalent_radii
 
 from ocdata.configs.paths import ADSORBATES_PKL_PATH, BULK_PKL_PATH
 from ocdata.core import Adslab, Adsorbate, Bulk, Surface
@@ -93,3 +94,66 @@ class TestAdslab:
             min_z.append(ads_pos[:, 2].min())
 
         assert np.all(np.array(min_z) > 20.0)
+
+    def test_is_adsorbate_com_on_site(self):
+        random.seed(0)
+
+        surface = Surface(self.bulk)
+        adslab = Adslab(surface, self.adsorbate, num_sites=100, mode="random")
+
+        samples = random.sample(adslab.structures, 10)
+        for sample in samples:
+            site, atoms = sample
+            mask = atoms.get_tags() == 2
+            adsorbate_atoms = atoms[mask]
+            adsorbate_com = adsorbate_atoms.get_center_of_mass()
+
+            # x,y coordinates should be the same
+            assert np.isclose(site[:2], adsorbate_com[:2]).all()
+
+    def test_is_adsorbate_binding_idx_on_site(self):
+        random.seed(0)
+
+        surface = Surface(self.bulk)
+        adslab = Adslab(surface, self.adsorbate, num_sites=100, mode="heuristic")
+        binding_idx = self.adsorbate.binding_indices[0]
+
+        samples = random.sample(adslab.structures, 10)
+        for sample in samples:
+            site, atoms = sample
+            mask = atoms.get_tags() == 2
+            adsorbate_atoms = atoms[mask]
+            binding_atom = adsorbate_atoms[binding_idx]
+
+            # x,y coordinates should be the same
+            assert np.isclose(site[:2], binding_atom[:2]).all()
+
+    def test_is_config_reasonable(self):
+        random.seed(0)
+
+        surface = Surface(self.bulk)
+        adslab = Adslab(surface, self.adsorbate, num_sites=100)
+
+        samples = random.sample(adslab.structures, 20)
+
+        for sample in samples:
+            site, atoms = sample
+            assert self.is_config_reasonable(atoms)
+
+    def is_config_reasonable(self, atoms):
+        adsorbate_mask = atoms.get_tags() == 2
+
+        atomic_numbers = atoms.get_atomic_numbers()
+        all_distances = atoms.get_all_distances(mic=True)
+
+        adsorbate_atomic_numbers = atomic_numbers[adsorbate_mask]
+        surface_atomic_numbers = atomic_numbers[~adsorbate_mask]
+        pair_covalent_radii = (
+            covalent_radii[adsorbate_atomic_numbers, None]
+            + covalent_radii[surface_atomic_numbers]
+        )
+
+        adsorbate_distances = all_distances[adsorbate_mask][:, ~adsorbate_mask]
+        pair_distances_minus_covalent = adsorbate_distances - pair_covalent_radii
+
+        return not (pair_distances_minus_covalent < 0).any()

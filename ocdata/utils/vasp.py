@@ -86,6 +86,8 @@ def _clean_up_inputs(atoms, vasp_flags):
                     with the unit vectors fixed (if needed)
         vasp_flags  A modified version of the 'vasp_flags' argument
     """
+    # Make a copy of the vasp_flags so we don't modify the original
+    vasp_flags = vasp_flags.copy()
     # Check that the unit vectors obey the right-hand rule, (X x Y points in
     # Z). If not, then flip the order of X and Y to enforce this so that VASP
     # is happy.
@@ -189,9 +191,9 @@ def write_vasp_input_files(atoms, outdir=".", vasp_flags=None):
                     calculator. Defaults to a standerd set of values if `None`
     """
     if vasp_flags is None:  # Immutable default
-        vasp_flags = VASP_FLAGS.copy()
+        vasp_flags = VASP_FLAGS
 
-    atoms, vasp_flags = _clean_up_inputs(atoms, vasp_flags.copy())
+    atoms, vasp_flags = _clean_up_inputs(atoms, vasp_flags)
     calc = Vasp(directory=outdir, **vasp_flags)
     calc.write_input(atoms)
 
