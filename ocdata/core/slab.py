@@ -15,13 +15,13 @@ from ocdata.configs.constants import MIN_XY
 from ocdata.core import Bulk
 
 
-class Surface:
+class Slab:
     """
-    Initializes a surface object, i.e. a particular slab tiled along xyz, in
+    Initializes a slab object, i.e. a particular slab tiled along xyz, in
     one of 2 ways:
     - Pass in a Bulk object and a slab 4-tuple containing
     (atoms, miller, shift, top).
-    - Pass in a Bulk object and randomly sample a surface.
+    - Pass in a Bulk object and randomly sample a slab.
 
     Arguments
     ---------

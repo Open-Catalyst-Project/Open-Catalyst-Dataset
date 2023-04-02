@@ -1,21 +1,22 @@
+import copy
+from itertools import product
+
 import ase
 import numpy as np
 import scipy
-from itertools import product
-
-from ocdata.core import Adsorbate, Surface
 from ase.data import atomic_numbers, covalent_radii
-import copy
+
+from ocdata.core import Adsorbate, Slab
 
 
-class Adslab:
+class AdsorbateSlabConfig:
     """
-    Initializes an adsorbate-catalyst system for a given Adsorbate and Surface.
+    Initializes an adsorbate-catalyst system for a given Adsorbate and Slab.
 
     Arguments
     ---------
-    surface: Surface
-        Surface object.
+    slab: Slab
+        Slab object.
     adsorbate: Adsorbate
         Adsorbate object.
     num_sites: int
@@ -30,13 +31,13 @@ class Adslab:
 
     def __init__(
         self,
-        surface: Surface,
+        slab: Slab,
         adsorbate: Adsorbate,
         num_sites: int = 100,
         num_augmentations_per_site: int = 1,
         height_adjustment: float = 0.1,
     ):
-        self.surface = surface
+        self.slab = slab
         self.adsorbate = adsorbate
         self.num_sites = num_sites
         self.num_augmentations_per_site = num_augmentations_per_site
@@ -54,12 +55,12 @@ class Adslab:
         Returns `num_sites` sites given the surface atoms' positions.
         """
         surface_atoms_idx = [
-            i for i, atom in enumerate(self.surface.atoms) if atom.tag == 1
+            i for i, atom in enumerate(self.slab.atoms) if atom.tag == 1
         ]
-        surface_atoms_pos = self.surface.atoms[surface_atoms_idx].positions
-        surface_atoms_elements = self.surface.atoms[
-            surface_atoms_idx
-        ].get_chemical_symbols()
+        surface_atoms_pos = self.slab.atoms[surface_atoms_idx].positions
+        # surface_atoms_elements = self.slab.atoms[
+        #     surface_atoms_idx
+        # ].get_chemical_symbols()
 
         dt = scipy.spatial.Delaunay(surface_atoms_pos[:, :2])
         simplices = dt.simplices
@@ -67,9 +68,10 @@ class Adslab:
         all_sites = []
         for tri in simplices:
             triangle_positions = surface_atoms_pos[tri]
-            triangle_els = [
-                el for idx, el in enumerate(surface_atoms_elements) if idx in tri
-            ]
+            # Comment(@abhshkdz): `triangle_els` unused?
+            # triangle_els = [
+            #     el for idx, el in enumerate(surface_atoms_elements) if idx in tri
+            # ]
             sites = get_random_sites_on_triangle(
                 triangle_positions, num_sites_per_triangle
             )
@@ -86,7 +88,7 @@ class Adslab:
         Place the adsorbate at the given binding site.
         """
         adsorbate_c = self.adsorbate.atoms.copy()
-        surface_c = self.surface.atoms.copy()
+        surface_c = self.slab.atoms.copy()
 
         # Rotate adsorbate along x, y, z.
         angles = np.random.uniform(0, 360, 3)
@@ -158,18 +160,19 @@ class Adslab:
             height_adjustment (float): [Agstroms] the added distance at each
                 translation of the adsorbate away from the surface
         """
-        surface_normal = self.surface.atoms.cell[2].copy()
+        surface_normal = self.slab.atoms.cell[2].copy()
         scaled_surface_normal = (
             surface_normal * height_adjustment / np.linalg.norm(surface_normal)
         )
 
         ## See which atoms are closest
-        surface_atoms = self.surface.atoms[
-            [idx for idx, tag in enumerate(self.surface.atoms.get_tags()) if tag == 1]
+        surface_atoms = self.slab.atoms[
+            [idx for idx, tag in enumerate(self.slab.atoms.get_tags()) if tag == 1]
         ]
         surface_atoms_tiled = custom_tile_atoms(surface_atoms)
 
-        total_distance_traversed = 0
+        # Comment(@abhshkdz): total_distance_traversed not used?
+        # total_distance_traversed = 0
         overlap_exists = there_is_overlap(adsorbate_atoms, surface_atoms_tiled)
         while overlap_exists:
             adsorbate_atoms.translate(scaled_surface_normal)

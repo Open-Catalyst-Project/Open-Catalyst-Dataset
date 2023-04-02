@@ -1,5 +1,4 @@
 from .adsorbate import Adsorbate
+from .adsorbate_slab_config import AdsorbateSlabConfig
 from .bulk import Bulk
-from .surface import Surface
-
-from .adslab import Adslab
+from .slab import Slab
