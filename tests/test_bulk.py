@@ -31,7 +31,7 @@ class TestBulk:
         assert bulk.atoms.get_chemical_formula() == "IrSn2"
 
     def test_unique_slab_enumeration(self):
-        slabs = self.bulk.compute_slabs()
+        slabs = self.bulk.get_slabs()
 
         seen = []
         for slab in slabs:
@@ -45,28 +45,30 @@ class TestBulk:
             pickle.dump(slabs, f)
 
     def test_precomputed_slab(self):
-        self.bulk.precomputed_slabs_path = os.path.dirname(self.precomputed_path)
+        precomputed_slabs_dir = os.path.dirname(self.precomputed_path)
 
-        precomputed_slabs = self.bulk.get_precomputed_slabs()
+        precomputed_slabs = self.bulk.get_slabs(
+            precomputed_slabs_dir=precomputed_slabs_dir
+        )
         assert len(precomputed_slabs) == 15
 
-        slabs = self.bulk.compute_slabs()
+        slabs = self.bulk.get_slabs()
         assert precomputed_slabs[0] == slabs[0]
 
         os.remove(self.precomputed_path)
 
     def test_slab_miller_enumeration(self):
-        slabs_max_miller_1 = self.bulk.compute_slabs(max_miller=1)
+        slabs_max_miller_1 = self.bulk.get_slabs(max_miller=1)
         assert self.get_max_miller(slabs_max_miller_1) == 1
-        slabs_max_miller_2 = self.bulk.compute_slabs(max_miller=2)
+        slabs_max_miller_2 = self.bulk.get_slabs(max_miller=2)
         assert self.get_max_miller(slabs_max_miller_2) == 2
-        slabs_max_miller_3 = self.bulk.compute_slabs(max_miller=3)
+        slabs_max_miller_3 = self.bulk.get_slabs(max_miller=3)
         assert self.get_max_miller(slabs_max_miller_3) == 3
 
     def get_max_miller(self, slabs):
         max_miller = 0
         for slab in slabs:
-            millers = slab[-3]
+            millers = slab.millers
             max_miller = max(max_miller, max(millers))
 
         return max_miller

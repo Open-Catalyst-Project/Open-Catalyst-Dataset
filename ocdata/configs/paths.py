@@ -1,5 +1,5 @@
-# Path to a database of bulks, organized as a dictionary with a unique integer
-# as key and corresponding bulk tuple as value.
+# Path to a database of bulks, organized as a list of dictionaries with
+# each dict containing atoms objects, mpid, and other metadata.
 BULK_PKL_PATH = "ocdata/databases/pkls/bulks.pkl"
 
 # Path to a folder of pickle files, each containing a list of precomputed

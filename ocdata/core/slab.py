@@ -3,16 +3,21 @@ import os
 import pickle
 from collections import defaultdict
 
+import ase
 import numpy as np
+import pymatgen
 from ase import neighborlist
 from ase.constraints import FixAtoms
 from pymatgen.analysis.local_env import VoronoiNN
 from pymatgen.core import Composition
+from pymatgen.core.surface import (
+    SlabGenerator,
+    get_symmetrically_distinct_miller_indices,
+)
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 
 from ocdata.configs.constants import MIN_XY
-from ocdata.core import Bulk
 
 
 class Slab:
@@ -26,41 +31,86 @@ class Slab:
     Arguments
     ---------
     bulk: Bulk
-        Corresponding bulk object.
-    slab: tuple
-        4-tuple containing (atoms, miller, shift, top).
+        Corresponding Bulk object.
+    unit_slab_struct: pymatgen.Structure
+        Unit cell slab structure.
+    millers: tuple
+        Miller indices of slab.
+    shift: float
+        Shift of slab.
+    top: bool
+        Whether slab is top or bottom.
+    tile_and_tag: bool
+        Whether to tile slab along xyz and tag surface / fixed atoms.
     """
 
     def __init__(
         self,
-        bulk: Bulk,
-        slab: tuple = None,
+        bulk=None,
+        unit_slab_struct: pymatgen.Structure = None,
+        millers: tuple = None,
+        shift: float = None,
+        top: bool = None,
+        tile_and_tag: bool = True,
     ):
-        self.bulk = bulk
-        self.slab = slab
-
         assert bulk is not None
+        self.bulk = bulk
 
-        if slab is not None:
-            # Comment(@abhshkdz): do all of these need to be class attributes?
-            self.unit_surface_struct, self.millers, self.shift, self.top = slab
-        else:
-            slabs = bulk.get_slabs()
-            slab_idx = np.random.randint(len(slabs))
-            self.unit_surface_struct, self.millers, self.shift, self.top = slabs[
-                slab_idx
-            ]
+        self.atoms = AseAtomsAdaptor.get_atoms(unit_slab_struct)
+        self.millers = millers
+        self.shift = shift
+        self.top = top
 
-        self.unit_surface_atoms = AseAtomsAdaptor.get_atoms(self.unit_surface_struct)
-        self.atoms = tile_atoms(self.unit_surface_atoms)
+        if tile_and_tag:
+            self.atoms = tile_atoms(self.atoms)
+            self.tag_surface_atoms()
+            self.set_fixed_atom_constraints()
 
         assert (
             Composition(self.atoms.get_chemical_formula()).reduced_formula
             == Composition(bulk.atoms.get_chemical_formula()).reduced_formula
         ), "Mismatched bulk and surface"
 
-        self.tag_surface_atoms()
-        self.set_fixed_atom_constraints()
+    @classmethod
+    def from_bulk_get_random_slab(cls, bulk=None, max_miller=2, tile_and_tag=True):
+        assert bulk is not None
+
+        slabs = compute_slabs(
+            bulk.atoms,
+            max_miller=max_miller,
+        )
+        slab_idx = np.random.randint(len(slabs))
+        unit_slab_struct, millers, shift, top = slabs[slab_idx]
+        return cls(bulk, unit_slab_struct, millers, shift, top, tile_and_tag)
+
+    @classmethod
+    def from_bulk_get_all_slabs(cls, bulk=None, max_miller=2, tile_and_tag=True):
+        assert bulk is not None
+
+        slabs = compute_slabs(
+            bulk.atoms,
+            max_miller=max_miller,
+        )
+        return [cls(bulk, s[0], s[1], s[2], s[3], tile_and_tag) for s in slabs]
+
+    @classmethod
+    def from_precomputed_slabs_pkl(
+        cls, bulk=None, precomputed_slabs_pkl=None, max_miller=2
+    ):
+        assert bulk is not None
+        assert precomputed_slabs_pkl is not None and os.path.exists(
+            precomputed_slabs_pkl
+        )
+
+        slabs = pickle.load(open(precomputed_slabs_pkl, "rb"))
+
+        is_slab_obj = np.all([isinstance(s, Slab) for s in slabs])
+        if is_slab_obj:
+            assert np.all(np.array([s.millers for s in slabs]) <= max_miller)
+            return slabs
+        else:
+            assert np.all(np.array([s[1] for s in slabs]) <= max_miller)
+            return [cls(bulk, s[0], s[1], s[2], s[3]) for s in slabs]
 
     def tag_surface_atoms(self):
         """
@@ -109,10 +159,18 @@ class Slab:
         return len(self.atoms)
 
     def __str__(self):
-        return f"Surface: {self.atoms.get_chemical_formula()}"
+        return f"Slab: ({self.atoms.get_chemical_formula()}, {self.millers}, {self.shift}, {self.top})"
 
     def __repr__(self):
         return self.__str__()
+
+    def __eq__(self, other):
+        return (
+            self.atoms == other.atoms
+            and self.millers == other.millers
+            and self.shift == other.shift
+            and self.top == other.top
+        )
 
 
 def tile_atoms(atoms, min_xy=MIN_XY):
@@ -273,3 +331,174 @@ def calculate_coordination_of_bulk_atoms(bulk_atoms):
         cn = round(cn, 5)
         bulk_cn_dict[site.species_string].add(cn)
     return bulk_cn_dict
+
+
+def compute_slabs(
+    bulk_atoms: ase.Atoms = None,
+    max_miller: int = 2,
+):
+    """
+    Enumerates all the symmetrically distinct slabs of a bulk structure.
+    It will not enumerate slabs with Miller indices above the
+    `max_miller` argument. Note that we also look at the bottoms of slabs
+    if they are distinct from the top. If they are distinct, we flip the
+    surface so the bottom is pointing upwards.
+
+    Args:
+        max_miller  An integer indicating the maximum Miller index of the slabs
+                    you are willing to enumerate. Increasing this argument will
+                    increase the number of slabs, but the slabs will
+                    generally become larger.
+    Returns:
+        all_slabs_info  A list of 4-tuples containing:  `pymatgen.Structure`
+                        objects for slabs we have enumerated, the Miller
+                        indices, floats for the shifts, and Booleans for "top".
+    """
+    assert bulk_atoms is not None
+    bulk_struct = standardize_bulk(bulk_atoms)
+
+    all_slabs_info = []
+    for millers in get_symmetrically_distinct_miller_indices(bulk_struct, max_miller):
+        slab_gen = SlabGenerator(
+            initial_structure=bulk_struct,
+            miller_index=millers,
+            min_slab_size=7.0,
+            min_vacuum_size=20.0,
+            lll_reduce=False,
+            center_slab=True,
+            primitive=True,
+            max_normal_search=1,
+        )
+        slabs = slab_gen.get_slabs(
+            tol=0.3, bonds=None, max_broken_bonds=0, symmetrize=False
+        )
+
+        # Comment(@abhshkdz): How do we extend this to datasets beyond MP?
+        # Additional filtering for the 2D materials' slabs
+        # if self.mpid is not None and self.mpid in COVALENT_MATERIALS_MPIDS:
+        #     slabs = [slab for slab in slabs if is_2D_slab_reasonable(slab) is True]
+
+        # If the bottom of the slabs are different than the tops, then we
+        # want to consider them too.
+        if len(slabs) != 0:
+            flipped_slabs_info = [
+                (flip_struct(slab), millers, slab.shift, False)
+                for slab in slabs
+                if is_structure_invertible(slab) is False
+            ]
+
+            # Concatenate all the results together
+            slabs_info = [(slab, millers, slab.shift, True) for slab in slabs]
+            all_slabs_info.extend(slabs_info + flipped_slabs_info)
+
+    return all_slabs_info
+
+
+def flip_struct(struct: pymatgen.Structure):
+    """
+    Flips an atoms object upside down. Normally used to flip slabs.
+
+    Arguments
+    ---------
+    struct: pymatgen.Structure
+        pymatgen structure object of the surface you want to flip
+
+    Returns
+    -------
+    flipped_struct: pymatgen.Structure
+        object of the flipped surface.
+    """
+    atoms = AseAtomsAdaptor.get_atoms(struct)
+
+    # This is black magic wizardry to me. Good look figuring it out.
+    atoms.wrap()
+    atoms.rotate(180, "x", rotate_cell=True, center="COM")
+    if atoms.cell[2][2] < 0.0:
+        atoms.cell[2] = -atoms.cell[2]
+    if np.cross(atoms.cell[0], atoms.cell[1])[2] < 0.0:
+        atoms.cell[1] = -atoms.cell[1]
+    atoms.center()
+    atoms.wrap()
+
+    return AseAtomsAdaptor.get_structure(atoms)
+
+
+def is_structure_invertible(struct: pymatgen.Structure):
+    """
+    This function figures out whether or not an `pymatgen.Structure`
+    object has symmetricity. In this function, the affine matrix is a rotation
+    matrix that is multiplied with the XYZ positions of the crystal. If the z,z
+    component of that is negative, it means symmetry operation exist, it could be a
+    mirror operation, or one that involves multiple rotations/etc. Regardless,
+    it means that the top becomes the bottom and vice-versa, and the structure
+    is the symmetric. i.e. structure_XYZ = structure_XYZ*M.
+
+    In short:  If this function returns `False`, then the input structure can
+    be flipped in the z-direction to create a new structure.
+
+    Arguments
+    ---------
+    struct: pymatgen.Structure
+
+    Returns
+    -------
+    A boolean indicating whether or not your `ase.Atoms` object is
+    symmetric in z-direction (i.e. symmetric with respect to x-y plane).
+    """
+    # If any of the operations involve a transformation in the z-direction,
+    # then the structure is invertible.
+    sga = SpacegroupAnalyzer(struct, symprec=0.1)
+    for operation in sga.get_symmetry_operations():
+        xform_matrix = operation.affine_matrix
+        z_xform = xform_matrix[2, 2]
+        if z_xform == -1:
+            return True
+    return False
+
+
+def standardize_bulk(atoms: ase.Atoms):
+    """
+    There are many ways to define a bulk unit cell. If you change the unit
+    cell itself but also change the locations of the atoms within the unit
+    cell, you can effectively get the same bulk structure. To address this,
+    there is a standardization method used to reduce the degrees of freedom
+    such that each unit cell only has one "true" configuration. This
+    function will align a unit cell you give it to fit within this
+    standardization.
+
+    Arguments
+    ---------
+    atoms: ase.Atoms
+        `ase.Atoms` object of the bulk you want to standardize
+
+    Returns
+    -------
+    standardized_struct: pymatgen.core.structure.Structure
+        object of the standardized bulk
+    """
+    struct = AseAtomsAdaptor.get_structure(atoms)
+    sga = SpacegroupAnalyzer(struct, symprec=0.1)
+    standardized_struct = sga.get_conventional_standard_structure()
+    return standardized_struct
+
+
+# def is_2D_slab_reasonable(struct: pymatgen.Structure):
+#     """
+#     There are 400+ 2D bulk materials whose slabs generated by pymatgen require
+#     additional filtering: some slabs are cleaved where one or more surface atoms
+#     have no bonds with other atoms on the slab.
+
+#     Arguments
+#     ---------
+#     struct: pymatgen.core.structure.Structure
+#         pymatgen structure object of a slab
+
+#     Returns
+#     -------
+#     A boolean indicating whether or not the slab is reasonable, where
+#     reasonable is defined as having at least one neighboring atom within 3A.
+#     """
+#     for site in struct:
+#         if len(struct.get_neighbors(site, 3)) == 0:
+#             return False
+#     return True

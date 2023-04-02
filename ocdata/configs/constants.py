@@ -243,9 +243,6 @@ COVALENT_RADIUS = {
     "Cs": 232.0,
 }
 
-# We will enumerate surfaces with Miller indices <= MAX_MILLER
-MAX_MILLER = 2
-
 # We will create surfaces that are at least MIN_XY Angstroms wide. GASpy uses
 # 4.5, but our larger adsorbates here can be up to 3.6 Angstroms long. So 4.5 +
 # 3.6 ~= 8 Angstroms
