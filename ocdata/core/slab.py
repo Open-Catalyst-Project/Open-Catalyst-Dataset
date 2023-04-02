@@ -112,6 +112,15 @@ class Slab:
             assert np.all(np.array([s[1] for s in slabs]) <= max_miller)
             return [cls(bulk, s[0], s[1], s[2], s[3]) for s in slabs]
 
+    @classmethod
+    def from_atoms(
+        cls, atoms=None, millers=None, shift=None, top=None, tile_and_tag=True
+    ):
+        assert atoms is not None
+        return cls(
+            AseAtomsAdaptor.get_structure(atoms), millers, shift, top, tile_and_tag
+        )
+
     def set_fixed_atom_constraints(self):
         """
         This function fixes sub-surface atoms of a surface. Also works on systems
