@@ -64,7 +64,7 @@ class Slab:
         if tile_and_tag:
             self.atoms = tile_atoms(self.atoms)
             self.atoms = tag_surface_atoms(self.atoms, self.bulk.atoms)
-            self.set_fixed_atom_constraints()
+            self.atoms = set_fixed_atom_constraints(self.atoms)
 
         assert (
             Composition(self.atoms.get_chemical_formula()).reduced_formula
@@ -113,37 +113,9 @@ class Slab:
             return [cls(bulk, s[0], s[1], s[2], s[3]) for s in slabs]
 
     @classmethod
-    def from_atoms(
-        cls, atoms=None, millers=None, shift=None, top=None, tile_and_tag=True
-    ):
+    def from_atoms(cls, atoms: ase.Atoms = None, bulk=None, **kwargs):
         assert atoms is not None
-        return cls(
-            AseAtomsAdaptor.get_structure(atoms), millers, shift, top, tile_and_tag
-        )
-
-    def set_fixed_atom_constraints(self):
-        """
-        This function fixes sub-surface atoms of a surface. Also works on systems
-        that have surface + adsorbate(s), as long as the bulk atoms are tagged with
-        `0`, surface atoms are tagged with `1`, and the adsorbate atoms are tagged
-        with `2` or above.
-
-        This function is used for both surface atoms and the combined surface+adsorbate
-
-        Inputs:
-            atoms           `ase.Atoms` class of the surface system. The tags of
-                            these atoms must be set such that any bulk/surface
-                            atoms are tagged with `0` or `1`, resectively, and any
-                            adsorbate atom is tagged with a 2 or above.
-        Returns:
-            atoms           A deep copy of the `atoms` argument, but where the appropriate
-                            atoms are constrained.
-        """
-        # We'll be making a `mask` list to feed to the `FixAtoms` class. This
-        # list should contain a `True` if we want an atom to be constrained, and
-        # `False` otherwise.
-        mask = [True if atom.tag == 0 else False for atom in self.atoms]
-        self.atoms.constraints += [FixAtoms(mask=mask)]
+        return cls(bulk, AseAtomsAdaptor.get_structure(atoms), **kwargs)
 
     def __len__(self):
         return len(self.atoms)
@@ -161,6 +133,33 @@ class Slab:
             and self.shift == other.shift
             and self.top == other.top
         )
+
+
+def set_fixed_atom_constraints(slab_atoms):
+    """
+    This function fixes sub-surface atoms of a surface. Also works on systems
+    that have surface + adsorbate(s), as long as the bulk atoms are tagged with
+    `0`, surface atoms are tagged with `1`, and the adsorbate atoms are tagged
+    with `2` or above.
+
+    This function is used for both surface atoms and the combined surface+adsorbate
+
+    Inputs:
+        atoms           `ase.Atoms` class of the surface system. The tags of
+                        these atoms must be set such that any bulk/surface
+                        atoms are tagged with `0` or `1`, resectively, and any
+                        adsorbate atom is tagged with a 2 or above.
+    Returns:
+        atoms           A deep copy of the `atoms` argument, but where the appropriate
+                        atoms are constrained.
+    """
+    # We'll be making a `mask` list to feed to the `FixAtoms` class. This
+    # list should contain a `True` if we want an atom to be constrained, and
+    # `False` otherwise.
+    slab_atoms = slab_atoms.copy()
+    mask = [True if atom.tag == 0 else False for atom in slab_atoms]
+    slab_atoms.constraints += [FixAtoms(mask=mask)]
+    return slab_atoms
 
 
 def tag_surface_atoms(
