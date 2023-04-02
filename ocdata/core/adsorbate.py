@@ -54,7 +54,10 @@ class Adsorbate:
         return len(self.atoms)
 
     def __str__(self):
-        return f"Adsorbate: {self.atoms.get_chemical_formula()}"
+        if self.smiles is not None:
+            return f"Adsorbate: ({self.atoms.get_chemical_formula()}, {self.smiles})"
+        else:
+            return f"Adsorbate: ({self.atoms.get_chemical_formula()})"
 
     def __repr__(self):
         return self.__str__()
