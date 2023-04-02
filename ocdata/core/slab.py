@@ -63,7 +63,7 @@ class Slab:
 
         if tile_and_tag:
             self.atoms = tile_atoms(self.atoms)
-            self.tag_surface_atoms()
+            self.atoms = tag_surface_atoms(self.atoms, self.bulk.atoms)
             self.set_fixed_atom_constraints()
 
         assert (
@@ -112,25 +112,6 @@ class Slab:
             assert np.all(np.array([s[1] for s in slabs]) <= max_miller)
             return [cls(bulk, s[0], s[1], s[2], s[3]) for s in slabs]
 
-    def tag_surface_atoms(self):
-        """
-        Sets the tags of an `ase.Atoms` object. Any atom that we consider a "bulk"
-        atom will have a tag of 0, and any atom that we consider a "surface" atom
-        will have a tag of 1. We use a combination of Voronoi neighbor algorithms
-        (adapted from from `pymatgen.core.surface.Slab.get_surface_sites`; see
-        https://pymatgen.org/pymatgen.core.surface.html) and a distance cutoff.
-
-        Arg:
-            bulk_atoms      `ase.Atoms` format of the respective bulk structure
-            surface_atoms   The surface where you are trying to find surface sites in
-                            `ase.Atoms` format
-        """
-        voronoi_tags = find_surface_atoms_with_voronoi(self.bulk.atoms, self.atoms)
-        height_tags = find_surface_atoms_by_height(self.atoms)
-        # If either of the methods consider an atom a "surface atom", then tag it as such.
-        tags = [max(v_tag, h_tag) for v_tag, h_tag in zip(voronoi_tags, height_tags)]
-        self.atoms.set_tags(tags)
-
     def set_fixed_atom_constraints(self):
         """
         This function fixes sub-surface atoms of a surface. Also works on systems
@@ -171,6 +152,39 @@ class Slab:
             and self.shift == other.shift
             and self.top == other.top
         )
+
+
+def tag_surface_atoms(
+    slab_atoms: ase.Atoms = None,
+    bulk_atoms: ase.Atoms = None,
+):
+    """
+    Sets the tags of an `ase.Atoms` object. Any atom that we consider a "bulk"
+    atom will have a tag of 0, and any atom that we consider a "surface" atom
+    will have a tag of 1. We use a combination of Voronoi neighbor algorithms
+    (adapted from `pymatgen.core.surface.Slab.get_surface_sites`; see
+    https://pymatgen.org/pymatgen.core.surface.html) and a distance cutoff.
+
+    Arg:
+        slab_atoms      The slab where you are trying to find surface sites in
+                        `ase.Atoms` format
+        bulk_atoms      `ase.Atoms` format of the respective bulk structure
+
+    """
+    assert slab_atoms is not None
+    slab_atoms = slab_atoms.copy()
+
+    height_tags = find_surface_atoms_by_height(slab_atoms)
+    if bulk_atoms is not None:
+        voronoi_tags = find_surface_atoms_with_voronoi(bulk_atoms, slab_atoms)
+        # If either of the methods consider an atom a "surface atom", then tag it as such.
+        tags = [max(v_tag, h_tag) for v_tag, h_tag in zip(voronoi_tags, height_tags)]
+    else:
+        tags = height_tags
+
+    slab_atoms.set_tags(tags)
+
+    return slab_atoms
 
 
 def tile_atoms(atoms, min_xy=MIN_XY):
@@ -230,7 +244,7 @@ def find_surface_atoms_by_height(surface_atoms):
     return tags
 
 
-def find_surface_atoms_with_voronoi(bulk_atoms, surface_atoms):
+def find_surface_atoms_with_voronoi(bulk_atoms, slab_atoms):
     """
     Labels atoms as surface or bulk atoms according to their coordination
     relative to their bulk structure. If an atom's coordination is less than it
@@ -248,17 +262,17 @@ def find_surface_atoms_with_voronoi(bulk_atoms, surface_atoms):
     ---------
     bulk_atoms: ase.Atoms
         The bulk structure that the surface was cut from.
-    surface_atoms: ase.Atoms
-        The surface structure.
+    slab_atoms: ase.Atoms
+        The slab structure.
 
     Returns
     -------
     tags: list
         A list of 0s and 1s whose indices align with the atoms in
-        `surface_atoms`. 0s indicate a bulk atom and 1 indicates a surface atom.
+        `slab_atoms`. 0s indicate a bulk atom and 1 indicates a surface atom.
     """
     # Initializations
-    surface_struct = AseAtomsAdaptor.get_structure(surface_atoms)
+    surface_struct = AseAtomsAdaptor.get_structure(slab_atoms)
     center_of_mass = calculate_center_of_mass(surface_struct)
     bulk_cn_dict = calculate_coordination_of_bulk_atoms(bulk_atoms)
     voronoi_nn = VoronoiNN(tol=0.1)  # 0.1 chosen for better detection
