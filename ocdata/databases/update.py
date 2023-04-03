@@ -9,6 +9,7 @@ from collections import defaultdict
 
 import ase.io
 from ase.atoms import Atoms
+from ase.calculators.singlepoint import SinglePointCalculator as SPC
 from tqdm import tqdm
 
 
@@ -48,18 +49,26 @@ def update_pkls():
             "rb",
         )
     )
-    new_dict = defaultdict(list)
-    for idx in data:
-        for info in tqdm(data[idx]):
-            atoms = info[0]
-            pbc = atoms.cell._pbc
-            atoms._pbc = pbc
-            new_dict[idx].append(atoms)
+
+    bulks = []
+    for info in tqdm(data):
+        atoms, bulk_id, _, _ = info
+        pbc = atoms.cell._pbc
+        atoms._pbc = pbc
+
+        if hasattr(atoms, "calc"):
+            temp_energy = atoms.get_potential_energy()
+            temp_forces = atoms.get_forces()
+            temp_calc = SPC(atoms=atoms, energy=temp_energy, forces=temp_forces)
+            temp_calc.implemented_properties = ["energy", "forces"]
+            atoms.set_calculator(temp_calc)
+
+        bulks.append((atoms, bulk_id))
     with open(
         "ocdata/databases/pkls/bulks_new.pkl",
         "wb",
     ) as f:
-        pickle.dump(new_dict, f)
+        pickle.dump(bulks, f)
 
 
 def update_dbs():
@@ -72,7 +81,15 @@ def update_dbs():
         for atoms in tqdm(db):
             pbc = atoms.cell._pbc
             atoms._pbc = pbc
+
+            if hasattr(atoms, "calc"):
+                temp_energy = atoms.get_potential_energy()
+                temp_forces = atoms.get_forces()
+                temp_calc = SPC(atoms=atoms, energy=temp_energy, forces=temp_forces)
+                temp_calc.implemented_properties = ["energy", "forces"]
+                atoms.set_calculator(temp_calc)
             new_data.append(atoms)
+
         ase.io.write(
             f"ocdata/databases/ase/{db_name}_new.db",
             new_data,
