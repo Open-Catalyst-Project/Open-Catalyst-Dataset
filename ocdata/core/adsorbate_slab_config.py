@@ -5,6 +5,8 @@ import ase
 import numpy as np
 import scipy
 from ase.data import atomic_numbers, covalent_radii
+from pymatgen.analysis.adsorption import AdsorbateSiteFinder
+from pymatgen.io.ase import AseAtomsAdaptor
 
 from ocdata.core import Adsorbate, Slab
 
@@ -24,7 +26,7 @@ class AdsorbateSlabConfig:
     num_augmentations_per_site: int
         Number of augmentations of the adsorbate per site. Total number of
         generated structures will be `num_sites` * `num_augmentations_per_site`.
-    height_adjustment: float
+    adsorbate_height_step_size: float
         Distance in Angstroms to add to the height of placement incrementally
         until there is no atomic overlap.
     """
@@ -35,102 +37,175 @@ class AdsorbateSlabConfig:
         adsorbate: Adsorbate,
         num_sites: int = 100,
         num_augmentations_per_site: int = 1,
-        height_adjustment: float = 0.1,
+        adsorbate_height_step_size: float = 0.1,
+        mode: str = "random",
     ):
+        assert mode in ["random", "heuristic"]
+
         self.slab = slab
         self.adsorbate = adsorbate
         self.num_sites = num_sites
         self.num_augmentations_per_site = num_augmentations_per_site
+        self.adsorbate_height_step_size = adsorbate_height_step_size
+        self.mode = mode
 
         self.sites = self.get_binding_sites(num_sites)
-        self.structures = self.place_adsorbate_on_sites(
+        self.atoms_list = self.place_adsorbate_on_sites(
             self.sites,
             num_augmentations_per_site,
-            height_adjustment,
+            adsorbate_height_step_size,
         )
-        self.structures = self.filter_unreasonable_structures(self.structures)
+        # self.atoms_list = self.filter_unreasonable_structures(self.atoms_list)
 
     def get_binding_sites(self, num_sites: int):
         """
         Returns `num_sites` sites given the surface atoms' positions.
         """
+        assert self.slab.has_surface_tagged()
+
         surface_atoms_idx = [
             i for i, atom in enumerate(self.slab.atoms) if atom.tag == 1
         ]
         surface_atoms_pos = self.slab.atoms[surface_atoms_idx].positions
-        # surface_atoms_elements = self.slab.atoms[
-        #     surface_atoms_idx
-        # ].get_chemical_symbols()
 
         dt = scipy.spatial.Delaunay(surface_atoms_pos[:, :2])
         simplices = dt.simplices
-        num_sites_per_triangle = int(np.ceil(num_sites / len(simplices)))
+
         all_sites = []
-        for tri in simplices:
-            triangle_positions = surface_atoms_pos[tri]
-            # Comment(@abhshkdz): `triangle_els` unused?
-            # triangle_els = [
-            #     el for idx, el in enumerate(surface_atoms_elements) if idx in tri
-            # ]
-            sites = get_random_sites_on_triangle(
-                triangle_positions, num_sites_per_triangle
-            )
-            all_sites += sites
-        np.random.shuffle(all_sites)
+        if self.mode == "random":
+            num_sites_per_triangle = int(np.ceil(num_sites / len(simplices)))
+            for tri in simplices:
+                triangle_positions = surface_atoms_pos[tri]
+                sites = get_random_sites_on_triangle(
+                    triangle_positions, num_sites_per_triangle
+                )
+                all_sites += sites
+            np.random.shuffle(all_sites)
+        elif self.mode == "heuristic":
+            ###
+            # Comment(@abhshkdz): Initial attempt at not making the trip from
+            # Ase to Pymatgen and back. But there are differences in the sites
+            # returned by the two methods. So, we'll stick to Pymatgen for now.
+            #
+            # https://pymatgen.org/pymatgen.analysis.adsorption.html
+            # Pymatgen assigns on-top, bridge, and hollow adsorption sites at
+            # the nodes, edges, and face centers of the Delauney triangulation.
+            # https://github.com/materialsproject/pymatgen/blob/v2023.3.23/pymatgen/analysis/adsorption.py#L217
+            # ontop: sites on top of surface atoms.
+            # all_sites += [site for site in surface_atoms_pos]
+            # for tri in simplices:
+            #     # bridge: sites at centers of edges between surface atoms.
+            #     for vpair in [[0, 1], [1, 2], [2, 0]]:
+            #         all_sites.append(
+            #             np.mean(surface_atoms_pos[tri][vpair], axis=0)
+            #         )
+            #     # hollow: sites at centers of Delaunay triangulation faces.
+            #     # Note that we currently don't implement the check to avoid
+            #     # sampling hollow sites in obtuse triangles:
+            #     # https://github.com/materialsproject/pymatgen/blob/v2023.3.23/pymatgen/analysis/adsorption.py#L272
+            #     all_sites.append(
+            #         np.mean(surface_atoms_pos[tri], axis=0)
+            #     )
+            ###
+            # Explicitly specify "surface" / "subsurface" atoms so that
+            # Pymatgen doesn't recompute tags.
+            site_properties = {"surface_properties": []}
+            for atom in self.slab.atoms:
+                if atom.tag == 1:
+                    site_properties["surface_properties"].append("surface")
+                else:
+                    site_properties["surface_properties"].append("subsurface")
+            struct = AseAtomsAdaptor.get_structure(self.slab.atoms)
+            # Copy because Pymatgen doesn't let us update site_properties.
+            struct = struct.copy(site_properties=site_properties)
+            asf = AdsorbateSiteFinder(struct)
+            # `distance` refers to the distance along the surface normal between
+            # the slab and the adsorbate. We set it to 0 here since we later
+            # explicitly check for atomic overlap and set the adsorbate height.
+            all_sites += asf.find_adsorption_sites(distance=0)["all"]
+            np.random.shuffle(all_sites)
+        else:
+            raise NotImplementedError
+
         return all_sites[:num_sites]
 
     def place_adsorbate_on_site(
         self,
         site: np.ndarray,
-        height_adjustment: float = 0.1,
+        adsorbate_height_step_size: float = 0.1,
     ):
         """
         Place the adsorbate at the given binding site.
         """
         adsorbate_c = self.adsorbate.atoms.copy()
-        surface_c = self.slab.atoms.copy()
+        slab_c = self.slab.atoms.copy()
 
         # Rotate adsorbate along x, y, z.
         angles = np.random.uniform(0, 360, 3)
-        adsorbate_c.rotate(angles[0], v="x", center="COM")
-        adsorbate_c.rotate(angles[1], v="y", center="COM")
-        adsorbate_c.rotate(angles[2], v="z", center="COM")
+        if self.mode == "random":
+            # About center of mass.
+            adsorbate_c.rotate(angles[0], v="x", center="COM")
+            adsorbate_c.rotate(angles[1], v="y", center="COM")
+            adsorbate_c.rotate(angles[2], v="z", center="COM")
+        elif self.mode == "heuristic":
+            # About binding atom.
+            binding_idx = self.adsorbate.binding_indices[0]
+            adsorbate_c.rotate(
+                angles[0], v="x", center=adsorbate_c.positions[binding_idx]
+            )
+            adsorbate_c.rotate(
+                angles[1], v="y", center=adsorbate_c.positions[binding_idx]
+            )
+            adsorbate_c.rotate(
+                angles[2], v="z", center=adsorbate_c.positions[binding_idx]
+            )
+        else:
+            raise NotImplementedError
 
         # Translate adsorbate to binding site.
-        com = adsorbate_c.get_center_of_mass()
-        translation_vector = site - com
-        adsorbate_c.translate(translation_vector)
+        if self.mode == "random":
+            com = adsorbate_c.get_center_of_mass()
+            translation_vector = site - com
+            adsorbate_c.translate(translation_vector)
+        elif self.mode == "heuristic":
+            binding_idx = self.adsorbate.binding_indices[0]
+            translation_vector = site - adsorbate_c.positions[binding_idx]
+            adsorbate_c.translate(translation_vector)
+        else:
+            raise NotImplementedError
 
-        # Translate the adsorbate by the scaled normal until it is proximate to the surface
-        self._reposition_adsorbate(adsorbate_c, height_adjustment)
+        # Translate the adsorbate by the scaled normal
+        # until it is proximate to the surface.
+        self._move_adsorbate_along_normal(adsorbate_c, adsorbate_height_step_size)
 
-        # Combine adsorbate and surface, and set tags correctly
-        structure = surface_c + adsorbate_c
+        # Combine adsorbate and slab, and set tags correctly
+        adslab = slab_c + adsorbate_c
         tags = [2] * len(adsorbate_c)
-        final_tags = list(surface_c.get_tags()) + tags
-        structure.set_tags(final_tags)
+        final_tags = list(slab_c.get_tags()) + tags
+        adslab.set_tags(final_tags)
 
         # Set pbc and cell.
-        structure.cell = surface_c.cell
-        structure.pbc = [True, True, False]
+        adslab.cell = slab_c.cell
+        adslab.pbc = [True, True, False]
 
-        return (site, structure)
+        return adslab
 
     def place_adsorbate_on_sites(
         self,
         sites: list,
         num_augmentations_per_site: int = 1,
-        height_adjustment: float = 0.1,
+        adsorbate_height_step_size: float = 0.1,
     ):
         """
         Place the adsorbate at the given binding sites.
         """
-        structures = []
+        atoms_list = []
         for site in sites:
             for _ in range(num_augmentations_per_site):
-                structures.append(self.place_adsorbate_on_site(site, height_adjustment))
-
-        return structures
+                atoms_list.append(
+                    self.place_adsorbate_on_site(site, adsorbate_height_step_size)
+                )
+        return atoms_list
 
     def filter_unreasonable_structures(self, structures: list):
         """
@@ -143,10 +218,10 @@ class AdsorbateSlabConfig:
                 filtered_structures.append(i)
         return filtered_structures
 
-    def _reposition_adsorbate(
+    def _move_adsorbate_along_normal(
         self,
-        adsorbate_atoms: ase.atoms.Atoms,
-        height_adjustment: float = 0.1,
+        adsorbate_atoms: ase.Atoms,
+        adsorbate_height_step_size: float = 0.1,
     ):
         """
         Translate the adsorbate along the surface normal so that it is proximate
@@ -155,24 +230,29 @@ class AdsorbateSlabConfig:
         more overlap.
 
         Args:
-            adsorbate_atoms (ase.atoms.Atoms): the adsorbate atoms copy which
+            adsorbate_atoms (ase.Atoms): the adsorbate atoms copy which
                 is being manipulated during placement
-            height_adjustment (float): [Agstroms] the added distance at each
+            adsorbate_height_step_size (float): [Agstroms] the added distance at each
                 translation of the adsorbate away from the surface
         """
+        # Comment(@abhshkdz): shouldn't surface normal be the unit vector along
+        # the cross product of a and b? atoms.cell[2] isn't guaranteed to be a
+        # surface normal, right?
+        # Eg see
+        # - https://github.com/materialsproject/pymatgen/blob/v2023.3.23/pymatgen/analysis/adsorption.py#L592
+        # - https://github.com/materialsproject/pymatgen/blob/v2023.3.23/pymatgen/analysis/adsorption.py#L293
         surface_normal = self.slab.atoms.cell[2].copy()
         scaled_surface_normal = (
-            surface_normal * height_adjustment / np.linalg.norm(surface_normal)
+            surface_normal * adsorbate_height_step_size / np.linalg.norm(surface_normal)
         )
 
-        ## See which atoms are closest
+        # See which atoms are closest
         surface_atoms = self.slab.atoms[
             [idx for idx, tag in enumerate(self.slab.atoms.get_tags()) if tag == 1]
         ]
         surface_atoms_tiled = custom_tile_atoms(surface_atoms)
 
         # Comment(@abhshkdz): total_distance_traversed not used?
-        # total_distance_traversed = 0
         overlap_exists = there_is_overlap(adsorbate_atoms, surface_atoms_tiled)
         while overlap_exists:
             adsorbate_atoms.translate(scaled_surface_normal)
@@ -208,16 +288,16 @@ def is_adslab_structure_reasonable(
     return True
 
 
-def custom_tile_atoms(atoms: ase.atoms.Atoms):
+def custom_tile_atoms(atoms: ase.Atoms):
     """
     Tile the atoms so that the center tile has the indices and positions of the
     untiled structure.
 
     Args:
-        atoms (ase.atoms.Atoms): the atoms object to be tiled
+        atoms (ase.Atoms): the atoms object to be tiled
 
     Return:
-        (ase.atoms.Atoms): the tiled atoms which has been repeated 3 times in
+        (ase.Atoms): the tiled atoms which has been repeated 3 times in
             the x and y directions but maintains the original indices on the central
             unit cell.
     """
@@ -236,15 +316,13 @@ def custom_tile_atoms(atoms: ase.atoms.Atoms):
     return new_atoms
 
 
-def there_is_overlap(
-    adsorbate_atoms: ase.atoms.Atoms, surface_atoms_tiled: ase.atoms.Atoms
-):
+def there_is_overlap(adsorbate_atoms: ase.Atoms, surface_atoms_tiled: ase.Atoms):
     """
     Check to see if there is any atomic overlap between surface atoms
     and adsorbate atoms.
 
     Args:
-        adsorbate_atoms (ase.atoms.Atoms): the adsorbate atoms copy which
+        adsorbate_atoms (ase.Atoms): the adsorbate atoms copy which
             is being manipulated during placement
         surface_atoms_tiled: a tiled copy of the surface atoms from
             `custom_tile_atoms`

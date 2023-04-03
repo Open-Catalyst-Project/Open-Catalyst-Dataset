@@ -117,6 +117,9 @@ class Slab:
         assert atoms is not None
         return cls(bulk, AseAtomsAdaptor.get_structure(atoms), **kwargs)
 
+    def has_surface_tagged(self):
+        return np.any(self.atoms.get_tags() == 1)
+
     def __len__(self):
         return len(self.atoms)
 
