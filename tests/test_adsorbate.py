@@ -10,6 +10,7 @@ class TestAdsorbate:
         adsorbate = Adsorbate(adsorbate_id_from_db=0)
         assert adsorbate.atoms.get_chemical_formula() == "O"
         assert adsorbate.smiles == "*O"
+        assert adsorbate.adsorbate_id_from_db == 0
 
     def test_adsorbate_init_random(self):
         random.seed(1)

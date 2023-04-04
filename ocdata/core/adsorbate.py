@@ -44,11 +44,10 @@ class Adsorbate:
             ]
         else:
             adsorbate_db = pickle.load(open(adsorbate_db_path, "rb"))
-            adsorbate_id_from_db = np.random.randint(len(adsorbate_db))
+            self.adsorbate_id_from_db = np.random.randint(len(adsorbate_db))
             self.atoms, self.smiles, self.binding_indices = adsorbate_db[
-                adsorbate_id_from_db
+                self.adsorbate_id_from_db
             ]
-            self.adsorbate_id_from_db = adsorbate_id_from_db
 
     def __len__(self):
         return len(self.atoms)

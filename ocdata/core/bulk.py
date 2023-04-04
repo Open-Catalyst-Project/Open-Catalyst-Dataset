@@ -49,8 +49,8 @@ class Bulk:
             self.atoms, self.src_id = bulk_obj["atoms"], bulk_obj["src_id"]
         else:
             bulk_db = pickle.load(open(bulk_db_path, "rb"))
-            bulk_id_from_db = np.random.randint(len(bulk_db))
-            bulk_obj = bulk_db[bulk_id_from_db]
+            self.bulk_id_from_db = np.random.randint(len(bulk_db))
+            bulk_obj = bulk_db[self.bulk_id_from_db]
             self.atoms, self.src_id = bulk_obj["atoms"], bulk_obj["src_id"]
 
     def set_source_dataset_id(self, src_id: str):
