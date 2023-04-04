@@ -9,11 +9,6 @@ ELEMENTS = {k: v for k, v in enumerate(ase.data.chemical_symbols)}
 # (Cordero et al., 2008): https://wiki.fysik.dtu.dk/ase/ase/data.html#id2.
 COVALENT_RADIUS = {ELEMENTS[k]: 100 * v for k, v in enumerate(ase.data.covalent_radii)}
 
-# We will create surfaces that are at least MIN_XY Angstroms wide. GASpy uses
-# 4.5, but our larger adsorbates here can be up to 3.6 Angstroms long. So 4.5 +
-# 3.6 ~= 8 Angstroms
-MIN_XY = 8.0
-
 COVALENT_MATERIALS_MPIDS = [
     "mp-104",
     "mp-79",

@@ -5,19 +5,16 @@ from collections import defaultdict
 
 import ase
 import numpy as np
-import pymatgen
-from ase import neighborlist
 from ase.constraints import FixAtoms
 from pymatgen.analysis.local_env import VoronoiNN
-from pymatgen.core import Composition, Structure
+from pymatgen.core.composition import Composition
+from pymatgen.core.structure import Structure
 from pymatgen.core.surface import (
     SlabGenerator,
     get_symmetrically_distinct_miller_indices,
 )
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-
-from ocdata.configs.constants import MIN_XY
 
 
 class Slab:
@@ -52,6 +49,7 @@ class Slab:
         shift: float = None,
         top: bool = None,
         tile_and_tag: bool = True,
+        min_ab: float = 8.0,
     ):
         assert bulk is not None
         self.bulk = bulk
@@ -62,7 +60,7 @@ class Slab:
         self.top = top
 
         if tile_and_tag:
-            self.atoms = tile_atoms(self.atoms)
+            self.atoms = tile_atoms(self.atoms, min_ab=min_ab)
             self.atoms = tag_surface_atoms(self.atoms, self.bulk.atoms)
             self.atoms = set_fixed_atom_constraints(self.atoms)
 
@@ -72,7 +70,9 @@ class Slab:
         ), "Mismatched bulk and surface"
 
     @classmethod
-    def from_bulk_get_random_slab(cls, bulk=None, max_miller=2, tile_and_tag=True):
+    def from_bulk_get_random_slab(
+        cls, bulk=None, max_miller=2, tile_and_tag=True, min_ab=8.0
+    ):
         assert bulk is not None
 
         slabs = compute_slabs(
@@ -81,21 +81,27 @@ class Slab:
         )
         slab_idx = np.random.randint(len(slabs))
         unit_slab_struct, millers, shift, top = slabs[slab_idx]
-        return cls(bulk, unit_slab_struct, millers, shift, top, tile_and_tag)
+        return cls(bulk, unit_slab_struct, millers, shift, top, tile_and_tag, min_ab)
 
     @classmethod
-    def from_bulk_get_all_slabs(cls, bulk=None, max_miller=2, tile_and_tag=True):
+    def from_bulk_get_all_slabs(
+        cls, bulk=None, max_miller=2, tile_and_tag=True, min_ab=8.0
+    ):
         assert bulk is not None
 
         slabs = compute_slabs(
             bulk.atoms,
             max_miller=max_miller,
         )
-        return [cls(bulk, s[0], s[1], s[2], s[3], tile_and_tag) for s in slabs]
+        return [cls(bulk, s[0], s[1], s[2], s[3], tile_and_tag, min_ab) for s in slabs]
 
     @classmethod
     def from_precomputed_slabs_pkl(
-        cls, bulk=None, precomputed_slabs_pkl=None, max_miller=2
+        cls,
+        bulk=None,
+        precomputed_slabs_pkl=None,
+        max_miller=2,
+        min_ab=8.0,
     ):
         assert bulk is not None
         assert precomputed_slabs_pkl is not None and os.path.exists(
@@ -110,7 +116,7 @@ class Slab:
             return slabs
         else:
             assert np.all(np.array([s[1] for s in slabs]) <= max_miller)
-            return [cls(bulk, s[0], s[1], s[2], s[3]) for s in slabs]
+            return [cls(bulk, s[0], s[1], s[2], s[3], min_ab=min_ab) for s in slabs]
 
     @classmethod
     def from_atoms(cls, atoms: ase.Atoms = None, bulk=None, **kwargs):
@@ -198,27 +204,29 @@ def tag_surface_atoms(
     return slab_atoms
 
 
-def tile_atoms(atoms, min_xy=MIN_XY):
+def tile_atoms(atoms: ase.Atoms, min_ab: float = 8):
     """
-    This function will repeat an atoms structure in the x and y direction until
-    the x and y dimensions are at least as wide as the MIN_XY constant.
+    This function will repeat an atoms structure in the direction of the a and b
+    lattice vectors such that they are at least as wide as the min_ab constant.
 
     Arguments
     ---------
     atoms: ase.Atoms
         The structure to tile.
+    min_ab: float
+        The minimum distance in x and y spanned by the tiled structure.
 
     Returns
     -------
     atoms_tiled: ase.Atoms
         The tiled structure.
     """
-    x_length = np.linalg.norm(atoms.cell[0])
-    y_length = np.linalg.norm(atoms.cell[1])
-    nx = int(math.ceil(min_xy / x_length))
-    ny = int(math.ceil(min_xy / y_length))
-    n_xyz = (nx, ny, 1)
-    atoms_tiled = atoms.repeat(n_xyz)
+    a_length = np.linalg.norm(atoms.cell[0])
+    b_length = np.linalg.norm(atoms.cell[1])
+    na = int(math.ceil(min_ab / a_length))
+    nb = int(math.ceil(min_ab / b_length))
+    n_abc = (na, nb, 1)
+    atoms_tiled = atoms.repeat(n_abc)
     return atoms_tiled
 
 
