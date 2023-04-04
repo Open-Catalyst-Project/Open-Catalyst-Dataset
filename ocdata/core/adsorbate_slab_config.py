@@ -9,6 +9,7 @@ from pymatgen.analysis.adsorption import AdsorbateSiteFinder
 from pymatgen.io.ase import AseAtomsAdaptor
 
 from ocdata.core import Adsorbate, Slab
+from ocdata.core.adsorbate import randomly_rotate_adsorbate
 
 
 class AdsorbateSlabConfig:
@@ -89,7 +90,7 @@ class AdsorbateSlabConfig:
             #
             # https://pymatgen.org/pymatgen.analysis.adsorption.html
             # Pymatgen assigns on-top, bridge, and hollow adsorption sites at
-            # the nodes, edges, and face centers of the Delauney triangulation.
+            # the nodes, edges, and face centers of the Delaunay triangulation.
             # https://github.com/materialsproject/pymatgen/blob/v2023.3.23/pymatgen/analysis/adsorption.py#L217
             # ontop: sites on top of surface atoms.
             # all_sites += [site for site in surface_atoms_pos]
@@ -140,27 +141,13 @@ class AdsorbateSlabConfig:
         adsorbate_c = self.adsorbate.atoms.copy()
         slab_c = self.slab.atoms.copy()
 
-        # Rotate adsorbate along x, y, z.
-        angles = np.random.uniform(0, 360, 3)
-        if self.mode == "random":
-            # About center of mass.
-            adsorbate_c.rotate(angles[0], v="x", center="COM")
-            adsorbate_c.rotate(angles[1], v="y", center="COM")
-            adsorbate_c.rotate(angles[2], v="z", center="COM")
-        elif self.mode == "heuristic":
-            # About binding atom.
-            binding_idx = self.adsorbate.binding_indices[0]
-            adsorbate_c.rotate(
-                angles[0], v="x", center=adsorbate_c.positions[binding_idx]
+        # Rotate adsorbate along xyz, only if adsorbate has more than 1 atom.
+        if len(self.adsorbate.atoms) > 1:
+            adsorbate_c = randomly_rotate_adsorbate(
+                adsorbate_c,
+                mode=self.mode,
+                binding_idx=self.adsorbate.binding_indices,
             )
-            adsorbate_c.rotate(
-                angles[1], v="y", center=adsorbate_c.positions[binding_idx]
-            )
-            adsorbate_c.rotate(
-                angles[2], v="z", center=adsorbate_c.positions[binding_idx]
-            )
-        else:
-            raise NotImplementedError
 
         # Translate adsorbate to binding site.
         if self.mode == "random":

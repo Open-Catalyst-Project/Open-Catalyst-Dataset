@@ -61,3 +61,32 @@ class Adsorbate:
 
     def __repr__(self):
         return self.__str__()
+
+
+def randomly_rotate_adsorbate(
+    adsorbate_atoms: ase.Atoms, mode: str = "random", binding_idx: list = None
+):
+    atoms = adsorbate_atoms.copy()
+    if mode == "random":
+        # Rotate about center of mass.
+        angles = np.random.uniform(0, 360, 3)
+        atoms.rotate(angles[0], v="x", center="COM")
+        atoms.rotate(angles[1], v="y", center="COM")
+        atoms.rotate(angles[2], v="z", center="COM")
+    elif mode == "heuristic":
+        assert binding_idx is not None
+        # Rotate about binding atom. Free to rotate uniformly about z, but only
+        # slight wobbles around x and y, to avoid crashing into the surface.
+        atoms.rotate(
+            np.random.randn() * 10, v="x", center=atoms.positions[binding_idx[0]]
+        )
+        atoms.rotate(
+            np.random.randn() * 10, v="y", center=atoms.positions[binding_idx[0]]
+        )
+        atoms.rotate(
+            np.random.uniform(0, 360), v="z", center=atoms.positions[binding_idx[0]]
+        )
+    else:
+        raise NotImplementedError
+
+    return atoms
