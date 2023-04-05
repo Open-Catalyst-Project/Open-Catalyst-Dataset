@@ -5,12 +5,16 @@ import ase
 import numpy as np
 import scipy
 from ase.data import atomic_numbers, covalent_radii
+from ase.geometry import wrap_positions
 from pymatgen.analysis.adsorption import AdsorbateSiteFinder
 from pymatgen.io.ase import AseAtomsAdaptor
 
 from ocdata.core import Adsorbate, Slab
 from ocdata.core.adsorbate import randomly_rotate_adsorbate
 from scipy.optimize import fsolve
+
+import warnings
+warnings.filterwarnings('ignore', 'The iteration is not making good progress')
 
 
 class AdsorbateSlabConfig:
@@ -165,12 +169,13 @@ class AdsorbateSlabConfig:
         normal = np.cross(self.slab.atoms.cell[0], self.slab.atoms.cell[1])
         unit_normal = normal / np.linalg.norm(normal)
         adsorbate_c2 = adsorbate_c.copy()
-        adsorbate_c.translate(unit_normal * 5)
 
-        adsorbate_slab_config = slab_c + adsorbate_c
+        adsorbate_slab_config = slab_c + adsorbate_c # CLEAN THIS UP LETS PASS THE OBJECTS SEPARATELY
         tags = [2] * len(adsorbate_c)
         final_tags = list(slab_c.get_tags()) + tags
         adsorbate_slab_config.set_tags(final_tags)
+        adsorbate_slab_config.cell = slab_c.cell 
+        adsorbate_slab_config.pbc = [True, True, False]
 
         scaled_normal = self._get_scaled_normal(
             adsorbate_slab_config,
@@ -184,7 +189,7 @@ class AdsorbateSlabConfig:
         adsorbate_slab_config.set_tags(final_tags)
 
         # Set pbc and cell.
-        adsorbate_slab_config.cell = slab_c.cell
+        adsorbate_slab_config.cell = slab_c.cell # Comment (@brookwander): I think this is unnecessary?
         adsorbate_slab_config.pbc = [True, True, False]
         return adsorbate_slab_config
 
@@ -227,20 +232,21 @@ class AdsorbateSlabConfig:
         Returns:
             (float): the scaled normal vector for proper placement
         """
+        # Center everthing about the site so we dont need to deal with pbc issues
+        scaled_site_position = np.linalg.solve(adsorbate_slab_atoms.cell.complete().T, site).T
+        atom_positions = wrap_positions(adsorbate_slab_atoms.get_positions(), adsorbate_slab_atoms.cell, center = (scaled_site_position[0], scaled_site_position[0], 0.5))
+        adsorbate_slab_atoms.set_positions(atom_positions)
+        
+        # See which combos have a possible intersection event
+        combos = self._find_combos_to_check(adsorbate_slab_atoms, unit_normal)
 
-        atom_positions = adsorbate_slab_atoms.get_positions()
-
-        # See which atoms are closest
-        closest_idxs, d_min, surf_pos = self._find_closest_combo(adsorbate_slab_atoms)
-
-        # Solve for the intersection
+        # Solve for the intersections
         if self.mode == "random":
             placement_center = adsorbate_atoms.get_center_of_mass()
         elif self.mode == "heuristic":
             binding_idx = self.adsorbate.binding_indices[0]
             placement_center = adsorbate_atoms.positions[binding_idx]
-        u_ = atom_positions[closest_idxs[0]] - placement_center
-
+        
         def fun(x):
             return (
                 (surf_pos[0] - (site[0] + x * unit_normal[0] + u_[0])) ** 2
@@ -248,13 +254,21 @@ class AdsorbateSlabConfig:
                 + (surf_pos[2] - (site[2] + x * unit_normal[2] + u_[2])) ** 2
                 - (d_min + interstitial_gap) ** 2
             )
+        if len(combos) > 0:
+            scaled_norms = []
+            for combo in combos:
+                closest_idxs, d_min, surf_pos = combo
+                u_ = atom_positions[closest_idxs[0]] - placement_center
+                n_scale = fsolve(fun, d_min * 3)
+                scaled_norms.append(n_scale[0])
 
-        n_scale = fsolve(fun, d_min * 3)
+            return max(scaled_norms)
+        else:
+            return 0 # if there are no possible surface itersections, place it at the site
 
-        return n_scale[0]
-
-    def _find_closest_combo(self, adsorbate_slab_atoms):
+    def _find_combos_to_check(self, adsorbate_slab_atoms, normal_vector):
         """
+        REDO**
         Find the pair of surface and adsorbate atoms that are closest to one another.
         Calculate the min distance between them (sum of atomic radii)
         Args:
@@ -272,61 +286,33 @@ class AdsorbateSlabConfig:
             idx for idx, tag in enumerate(adsorbate_slab_atoms.get_tags()) if tag == 1
         ]
         ads_slab_config_elements = adsorbate_slab_atoms.get_chemical_symbols()
-
-        all_chemical_symbols = adsorbate_slab_atoms.get_chemical_symbols()
+        ads_slab_positions = adsorbate_slab_atoms.get_positions()
+        
+        projected_points = self._get_projected_points(adsorbate_slab_atoms, normal_vector)
 
         pairs = list(product(adsorbate_idxs, surface_idxs))
-
-        post_radial_distances = []
-
+        
+        combos_to_check = []
         for combo in pairs:
-            total_distance = adsorbate_slab_atoms.get_distance(
-                combo[0], combo[1], mic=True
+            distance = np.linalg.norm(projected_points[combo[0]] - projected_points[combo[1]])
+            radial_distance = covalent_radii[atomic_numbers[ads_slab_config_elements[combo[0]]]] + covalent_radii[atomic_numbers[ads_slab_config_elements[combo[1]]]]
+            if distance <= radial_distance:
+                combos_to_check.append([combo, radial_distance, ads_slab_positions[combo[1]]])
+        return combos_to_check
+        
+    def _get_projected_points(self, adsorbate_slab_config, normal_vector):
+        projected_points = []
+        point_on_surface = adsorbate_slab_config.cell[0]
+        atom_positions = adsorbate_slab_config.get_positions()
+        for idx, atom in enumerate(adsorbate_slab_config):
+            v_ = atom_positions[idx] - point_on_surface
+            projected_point = point_on_surface + (
+                v_
+                - (np.dot(v_, normal_vector) / np.linalg.norm(normal_vector) ** 2)
+                * normal_vector
             )
-            post_radial_distance = (
-                total_distance
-                - covalent_radii[atomic_numbers[ads_slab_config_elements[combo[0]]]]
-                - covalent_radii[atomic_numbers[ads_slab_config_elements[combo[1]]]]
-            )
-            post_radial_distances.append(post_radial_distance)
-
-        closest_combo = pairs[post_radial_distances.index(min(post_radial_distances))]
-        min_interstitial_distance = (
-            covalent_radii[atomic_numbers[ads_slab_config_elements[closest_combo[0]]]]
-            + covalent_radii[atomic_numbers[ads_slab_config_elements[closest_combo[1]]]]
-        )
-
-        min_distance = min(post_radial_distances) + min_interstitial_distance
-        surface_pos = adsorbate_slab_atoms.get_positions()[closest_combo[1]]
-        adsorbate_pos = adsorbate_slab_atoms.get_positions()[closest_combo[0]]
-
-        # Get pbc corrected surface atom position if need be
-        if (
-            abs(
-                adsorbate_slab_atoms.get_distance(closest_combo[0], closest_combo[1])
-                - min_distance
-            )
-            > 0.1
-        ):
-            repeats = list(product([-1, 0, 1], repeat=2))
-            repeats.remove((0, 0))
-            for repeat in repeats:
-                pbc_corrected_pos = (
-                    self.slab.atoms.cell[0] * repeat[0]
-                    + self.slab.atoms.cell[0] * repeat[1]
-                    + surface_pos
-                )
-                if (
-                    abs(
-                        np.linalg.norm(pbc_corrected_pos - adsorbate_pos) - min_distance
-                    )
-                    < 0.1
-                ):
-                    break
-            return closest_combo, min_interstitial_distance, pbc_corrected_pos
-        else:
-            return closest_combo, min_interstitial_distance, surface_pos
-
+            projected_points.append(projected_point[0:2])
+        return projected_points
 
 def get_random_sites_on_triangle(
     vertices: np.ndarray,
