@@ -36,13 +36,13 @@ class TestAdslab:
         assert np.all(
             np.isclose(
                 adslab.atoms_list[0].get_positions().mean(0),
-                np.array([6.89636428, 6.64944068, 16.19283703]),
+                np.array([6.92797537, 6.14142015, 16.21946298]),
             )
         )
         assert np.all(
             np.isclose(
                 adslab.atoms_list[1].get_positions().mean(0),
-                np.array([7.04126794, 6.53481926, 16.14532353]),
+                np.array([6.84505652, 6.48877279, 16.16821032]),
             )
         )
 
@@ -61,20 +61,14 @@ class TestAdslab:
 
     def test_adsorbate_height_step_size(self):
         """
-        Test that the adsorbate atoms are all above `adsorbate_height_step_size`.
-
-        Comment(@abhshkdz): This test is very loose and should be improved.
-        All we're currently checking is that the adsorbate atoms are above
-        `adsorbate_height_step_size` and not below it. A tighter version of the check would be
-        to make sure that the gap between the adsorbate atoms and the surface
-        is at least `adsorbate_height_step_size`.
+        Test that the adsorbate atoms are all above `interstitial_gap`.
         """
         random.seed(1)
         np.random.seed(1)
 
         slab = Slab.from_bulk_get_random_slab(self.bulk)
         adslab = AdsorbateSlabConfig(
-            slab, self.adsorbate, num_sites=100, adsorbate_height_step_size=2.0
+            slab, self.adsorbate, num_sites=100, interstitial_gap=2.0
         )
         assert len(adslab.atoms_list) == 100
 
@@ -87,7 +81,7 @@ class TestAdslab:
         assert np.all(np.array(min_z) > 2.0)
 
         adslab = AdsorbateSlabConfig(
-            slab, self.adsorbate, num_sites=100, adsorbate_height_step_size=20.0
+            slab, self.adsorbate, num_sites=100, interstitial_gap=20.0
         )
         min_z = []
         for i in adslab.atoms_list:

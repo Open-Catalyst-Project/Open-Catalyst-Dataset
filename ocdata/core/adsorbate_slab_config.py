@@ -1,4 +1,5 @@
 import copy
+import logging
 from itertools import product
 
 import ase
@@ -8,10 +9,10 @@ from ase.data import atomic_numbers, covalent_radii
 from ase.geometry import wrap_positions
 from pymatgen.analysis.adsorption import AdsorbateSiteFinder
 from pymatgen.io.ase import AseAtomsAdaptor
+from scipy.optimize import fsolve
 
 from ocdata.core import Adsorbate, Slab
 from ocdata.core.adsorbate import randomly_rotate_adsorbate
-from scipy.optimize import fsolve
 
 import warnings
 warnings.filterwarnings('ignore', 'The iteration is not making good progress')
@@ -32,9 +33,25 @@ class AdsorbateSlabConfig:
     num_augmentations_per_site: int
         Number of augmentations of the adsorbate per site. Total number of
         generated structures will be `num_sites` * `num_augmentations_per_site`.
-    adsorbate_height_step_size: float
-        Distance in Angstroms to add to the height of placement incrementally
-        until there is no atomic overlap.
+    interstitial_gap: float
+        Minimum distance in Angstroms between adsorbate and slab atoms.
+    mode: str
+        "random" or "heuristic".
+        This affects surface site sampling and adsorbate placement on each site.
+
+        In "random", we do a Delaunay triangulation of the surface atoms, then
+        sample sites uniformly at random within each triangle. When placing the
+        adsorbate, we randomly rotate it along xyz, and place it such that the
+        center of mass is at the site.
+
+        In "heuristic", we use Pymatgen's AdsorbateSiteFinder to find the most
+        energetically favorable sites, i.e., ontop, bridge, or hollow sites.
+        When placing the adsorbate, we randomly rotate it along z with only
+        slight rotation along x and y, and place it such that the binding atom
+        is at the site.
+
+        In both cases, the adsorbate is placed at the closest position of no
+        overlap with the slab plus `interstitial_gap` along the surface normal.
     """
 
     def __init__(
@@ -65,54 +82,72 @@ class AdsorbateSlabConfig:
 
     def get_binding_sites(self, num_sites: int):
         """
-        Returns `num_sites` sites given the surface atoms' positions.
+        Returns up to `num_sites` sites given the surface atoms' positions.
         """
         assert self.slab.has_surface_tagged()
 
-        surface_atoms_idx = [
-            i for i, atom in enumerate(self.slab.atoms) if atom.tag == 1
-        ]
-        surface_atoms_pos = self.slab.atoms[surface_atoms_idx].positions
-
-        dt = scipy.spatial.Delaunay(surface_atoms_pos[:, :2])
-        simplices = dt.simplices
-
         all_sites = []
         if self.mode == "random":
-            num_sites_per_triangle = int(np.ceil(num_sites / len(simplices)))
+            # The Delaunay triangulation of surface atoms doesn't take PBC into
+            # account, so we end up undersampling triangles near the edges of
+            # the central unit cell. To avoid that, we explicitly tile the slab
+            # in the x-y plane, then consider the triangles with at least one
+            # vertex in the central cell.
+            #
+            # Pymatgen does something similar where they repeat the central cell
+            # in the x-y plane, generate sites, and then remove symmetric sites.
+            # https://github.com/materialsproject/pymatgen/blob/v2023.3.23/pymatgen/analysis/adsorption.py#L257
+            # https://github.com/materialsproject/pymatgen/blob/v2023.3.23/pymatgen/analysis/adsorption.py#L292
+            unit_surface_atoms_idx = [
+                i for i, atom in enumerate(self.slab.atoms) if atom.tag == 1
+            ]
+
+            tiled_slab_atoms = custom_tile_atoms(self.slab.atoms)
+            tiled_surface_atoms_idx = [
+                i for i, atom in enumerate(tiled_slab_atoms) if atom.tag == 1
+            ]
+            tiled_surface_atoms_pos = tiled_slab_atoms[
+                tiled_surface_atoms_idx
+            ].get_positions()
+
+            dt = scipy.spatial.Delaunay(tiled_surface_atoms_pos[:, :2])
+            simplices = dt.simplices
+
+            # Only keep triangles with at least one vertex in central cell.
+            pruned_simplices = []
             for tri in simplices:
-                triangle_positions = surface_atoms_pos[tri]
+                if np.any(
+                    [
+                        tiled_surface_atoms_idx[ver] in unit_surface_atoms_idx
+                        for ver in tri
+                    ]
+                ):
+                    pruned_simplices.append(tri)
+            simplices = np.array(pruned_simplices)
+
+            # Uniformly sample sites on each triangle.
+            #
+            # We oversample by 2x to account for the fact that some sites will
+            # later be removed due to being outside the central cell.
+            num_sites_per_triangle = int(np.ceil(2.0 * num_sites / len(simplices)))
+            for tri in simplices:
+                triangle_positions = tiled_surface_atoms_pos[tri]
                 sites = get_random_sites_on_triangle(
                     triangle_positions, num_sites_per_triangle
                 )
                 all_sites += sites
+
+            # Some vertices will be outside the central cell, drop them.
+            uw_sites = np.array(all_sites)
+            w_sites = wrap_positions(
+                uw_sites, self.slab.atoms.cell, pbc=(True, True, False)
+            )
+            keep_idx = np.isclose(uw_sites, w_sites).all(axis=1)
+            all_sites = uw_sites[keep_idx]
+
             np.random.shuffle(all_sites)
+            return all_sites[:num_sites]
         elif self.mode == "heuristic":
-            ###
-            # Comment(@abhshkdz): Initial attempt at not making the trip from
-            # Ase to Pymatgen and back. But there are differences in the sites
-            # returned by the two methods. So, we'll stick to Pymatgen for now.
-            #
-            # https://pymatgen.org/pymatgen.analysis.adsorption.html
-            # Pymatgen assigns on-top, bridge, and hollow adsorption sites at
-            # the nodes, edges, and face centers of the Delaunay triangulation.
-            # https://github.com/materialsproject/pymatgen/blob/v2023.3.23/pymatgen/analysis/adsorption.py#L217
-            # ontop: sites on top of surface atoms.
-            # all_sites += [site for site in surface_atoms_pos]
-            # for tri in simplices:
-            #     # bridge: sites at centers of edges between surface atoms.
-            #     for vpair in [[0, 1], [1, 2], [2, 0]]:
-            #         all_sites.append(
-            #             np.mean(surface_atoms_pos[tri][vpair], axis=0)
-            #         )
-            #     # hollow: sites at centers of Delaunay triangulation faces.
-            #     # Note that we currently don't implement the check to avoid
-            #     # sampling hollow sites in obtuse triangles:
-            #     # https://github.com/materialsproject/pymatgen/blob/v2023.3.23/pymatgen/analysis/adsorption.py#L272
-            #     all_sites.append(
-            #         np.mean(surface_atoms_pos[tri], axis=0)
-            #     )
-            ###
             # Explicitly specify "surface" / "subsurface" atoms so that
             # Pymatgen doesn't recompute tags.
             site_properties = {"surface_properties": []}
@@ -129,11 +164,16 @@ class AdsorbateSlabConfig:
             # the slab and the adsorbate. We set it to 0 here since we later
             # explicitly check for atomic overlap and set the adsorbate height.
             all_sites += asf.find_adsorption_sites(distance=0)["all"]
+
+            if len(all_sites) > num_sites:
+                logging.warning(
+                    f"Found {len(all_sites)} sites in `get_binding_sites` run with mode='heuristic' and num_sites={num_sites}. Heuristic mode returns all found sites."
+                )
+
             np.random.shuffle(all_sites)
+            return all_sites
         else:
             raise NotImplementedError
-
-        return all_sites[:num_sites]
 
     def place_adsorbate_on_site(
         self,
@@ -287,7 +327,6 @@ class AdsorbateSlabConfig:
         ]
         ads_slab_config_elements = adsorbate_slab_atoms.get_chemical_symbols()
         ads_slab_positions = adsorbate_slab_atoms.get_positions()
-        
         projected_points = self._get_projected_points(adsorbate_slab_atoms, normal_vector)
 
         pairs = list(product(adsorbate_idxs, surface_idxs))
