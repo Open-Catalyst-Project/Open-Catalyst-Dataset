@@ -39,7 +39,7 @@ class AdsorbateSlabConfig:
         adsorbate: Adsorbate,
         num_sites: int = 100,
         num_augmentations_per_site: int = 1,
-        adsorbate_height_step_size: float = 0.1,
+        interstitial_gap: float = 0.1,
         mode: str = "random",
     ):
         assert mode in ["random", "heuristic"]
@@ -48,14 +48,14 @@ class AdsorbateSlabConfig:
         self.adsorbate = adsorbate
         self.num_sites = num_sites
         self.num_augmentations_per_site = num_augmentations_per_site
-        self.adsorbate_height_step_size = adsorbate_height_step_size
+        self.interstitial_gap = interstitial_gap
         self.mode = mode
 
         self.sites = self.get_binding_sites(num_sites)
         self.atoms_list = self.place_adsorbate_on_sites(
             self.sites,
             num_augmentations_per_site,
-            adsorbate_height_step_size,
+            interstitial_gap,
         )
         # self.atoms_list = self.filter_unreasonable_structures(self.atoms_list)
 
@@ -134,7 +134,7 @@ class AdsorbateSlabConfig:
     def place_adsorbate_on_site(
         self,
         site: np.ndarray,
-        adsorbate_height_step_size: float = 0.1,
+        interstitial_gap: float = 0.1,
     ):
         """
         Place the adsorbate at the given binding site.
@@ -152,15 +152,14 @@ class AdsorbateSlabConfig:
 
         # Translate adsorbate to binding site.
         if self.mode == "random":
-            com = adsorbate_c.get_center_of_mass()
-            translation_vector = site - com
-            adsorbate_c.translate(translation_vector)
+            placement_center = adsorbate_c.get_center_of_mass()
         elif self.mode == "heuristic":
             binding_idx = self.adsorbate.binding_indices[0]
-            translation_vector = site - adsorbate_c.positions[binding_idx]
-            adsorbate_c.translate(translation_vector)
+            placement_center = adsorbate_c.positions[binding_idx]
         else:
             raise NotImplementedError
+        translation_vector = site - placement_center
+        adsorbate_c.translate(translation_vector)
 
         # Translate the adsorbate by the normal so it is far away
         normal = np.cross(self.slab.atoms.cell[0], self.slab.atoms.cell[1])
@@ -174,7 +173,11 @@ class AdsorbateSlabConfig:
         adsorbate_slab_config.set_tags(final_tags)
 
         scaled_normal = self._get_scaled_normal(
-            adsorbate_slab_config, site, adsorbate_c, unit_normal
+            adsorbate_slab_config,
+            site,
+            adsorbate_c,
+            unit_normal,
+            interstitial_gap,
         )
         adsorbate_c2.translate(scaled_normal * unit_normal)
         adsorbate_slab_config = slab_c + adsorbate_c2
@@ -190,6 +193,7 @@ class AdsorbateSlabConfig:
         sites: list,
         num_augmentations_per_site: int = 1,
         adsorbate_height_step_size: float = 0.1,
+        interstitial_gap: float = 0.1,
     ):
         """
         Place the adsorbate at the given binding sites.
@@ -197,17 +201,16 @@ class AdsorbateSlabConfig:
         atoms_list = []
         for site in sites:
             for _ in range(num_augmentations_per_site):
-                atoms_list.append(
-                    self.place_adsorbate_on_site(site, adsorbate_height_step_size)
-                )
+                atoms_list.append(self.place_adsorbate_on_site(site, interstitial_gap))
         return atoms_list
 
     def _get_scaled_normal(
         self,
         adsorbate_slab_atoms: ase.Atoms,
         site: np.ndarray,
-        translation_vector: np.ndarray,
+        adsorbate_atoms: ase.Atoms,
         unit_normal: np.ndarray,
+        interstitial_gap: float = 0.1,
     ):
         """
         Translate the adsorbate along the surface normal so that it is proximate
@@ -217,9 +220,12 @@ class AdsorbateSlabConfig:
         Args:
             adsorbate_slab_atoms (ase.Atoms): the initial adslab with poor placement
             site (np.ndarray): the coordinate of the site
-            translation_vector (np.ndarray): the vector used to translate the adsorbate so the
-                placement reference lies at (0,0,0)
+            adsorbate_atoms (ase.Atoms): the translated adsorbate
             unit_normal (np.ndarray): the unit vector normal to the surface
+            interstitial_gap (float): the desired distance between the covalent radii of the
+                closest surface and adsorbate atom
+        Returns:
+            (float): the scaled normal vector for proper placement
         """
 
         atom_positions = adsorbate_slab_atoms.get_positions()
@@ -228,14 +234,19 @@ class AdsorbateSlabConfig:
         closest_idxs, d_min, surf_pos = self._find_closest_combo(adsorbate_slab_atoms)
 
         # Solve for the intersection
-        u_ = atom_positions[closest_idxs[0]] + translation_vector - site
+        if self.mode == "random":
+            placement_center = adsorbate_atoms.get_center_of_mass()
+        elif self.mode == "heuristic":
+            binding_idx = self.adsorbate.binding_indices[0]
+            placement_center = adsorbate_atoms.positions[binding_idx]
+        u_ = atom_positions[closest_idxs[0]] - placement_center
 
         def fun(x):
             return (
                 (surf_pos[0] - (site[0] + x * unit_normal[0] + u_[0])) ** 2
                 + (surf_pos[1] - (site[1] + x * unit_normal[1] + u_[1])) ** 2
                 + (surf_pos[2] - (site[2] + x * unit_normal[2] + u_[2])) ** 2
-                - (d_min + 0.1) ** 2
+                - (d_min + interstitial_gap) ** 2
             )
 
         n_scale = fsolve(fun, d_min * 3)
