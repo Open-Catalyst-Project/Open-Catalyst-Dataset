@@ -1,14 +1,5 @@
 import ase
 
-# TODO(@abhshkdz): remove this if unused.
-ELEMENTS = {k: v for k, v in enumerate(ase.data.chemical_symbols)}
-
-# Covalent radius of elements (unit is pm, 1pm=0.01 angstrom)
-# Values were originally from https://github.com/lmmentel/mendeleev.
-# But we recently switched over to ase, which uses a different source,
-# (Cordero et al., 2008): https://wiki.fysik.dtu.dk/ase/ase/data.html#id2.
-COVALENT_RADIUS = {ELEMENTS[k]: 100 * v for k, v in enumerate(ase.data.covalent_radii)}
-
 COVALENT_MATERIALS_MPIDS = [
     "mp-104",
     "mp-79",
