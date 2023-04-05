@@ -1,5 +1,6 @@
 import copy
 import logging
+import warnings
 from itertools import product
 
 import ase
@@ -13,8 +14,6 @@ from scipy.optimize import fsolve
 
 from ocdata.core import Adsorbate, Slab
 from ocdata.core.adsorbate import randomly_rotate_adsorbate
-
-import warnings
 
 # warnings.filterwarnings("ignore", "The iteration is not making good progress")
 
@@ -280,13 +279,10 @@ class AdsorbateSlabConfig:
         """
         # Center everthing about the site so we dont need to deal with pbc issues
         slab_c2 = slab_c.copy()
-        scaled_site_position = np.linalg.solve(slab_c2.cell.complete().T, site).T
-        slab_positions = wrap_positions(
-            slab_c2.get_positions(),
-            slab_c2.cell,
-            center=(scaled_site_position[0], scaled_site_position[0], 0.5),
-        )
-        slab_c2.set_positions(slab_positions)
+        cell_center = np.dot(np.array([0.5, 0.5, 0.5]), slab_c2.cell)
+        slab_c2.translate(cell_center - site)
+        slab_c2.wrap()
+
         adsorbate_positions = adsorbate_c.get_positions()
 
         # See which combos have a possible intersection event
