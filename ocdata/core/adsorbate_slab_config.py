@@ -10,6 +10,7 @@ from pymatgen.io.ase import AseAtomsAdaptor
 
 from ocdata.core import Adsorbate, Slab
 from ocdata.core.adsorbate import randomly_rotate_adsorbate
+from scipy.optimize import fsolve
 
 
 class AdsorbateSlabConfig:
@@ -160,22 +161,27 @@ class AdsorbateSlabConfig:
             adsorbate_c.translate(translation_vector)
         else:
             raise NotImplementedError
-
-        # Translate the adsorbate by the scaled normal
-        # until it is proximate to the surface.
-        self._move_adsorbate_along_normal(adsorbate_c, adsorbate_height_step_size)
-
-        # Combine adsorbate and slab, and set tags correctly
-        adslab = slab_c + adsorbate_c
+        
+        # Translate the adsorbate by the normal so it is far away
+        normal = np.cross(self.slab.atoms.cell[0], self.slab.atoms.cell[1])
+        unit_normal = normal / np.linalg.norm(normal)
+        adsorbate_c2 = adsorbate_c.copy()
+        adsorbate_c.translate(unit_normal*5)
+        
+        adsorbate_slab_config = slab_c + adsorbate_c
         tags = [2] * len(adsorbate_c)
         final_tags = list(slab_c.get_tags()) + tags
-        adslab.set_tags(final_tags)
+        adsorbate_slab_config.set_tags(final_tags)
+        
+        scaled_normal = self._get_scaled_normal(adsorbate_slab_config, site, adsorbate_c, unit_normal)
+        adsorbate_c2.translate(scaled_normal*unit_normal)
+        adsorbate_slab_config = slab_c + adsorbate_c2
+        adsorbate_slab_config.set_tags(final_tags)
 
         # Set pbc and cell.
-        adslab.cell = slab_c.cell
-        adslab.pbc = [True, True, False]
-
-        return adslab
+        adsorbate_slab_config.cell = slab_c.cell
+        adsorbate_slab_config.pbc = [True, True, False]
+        return adsorbate_slab_config
 
     def place_adsorbate_on_sites(
         self,
@@ -194,21 +200,12 @@ class AdsorbateSlabConfig:
                 )
         return atoms_list
 
-    def filter_unreasonable_structures(self, structures: list):
-        """
-        Filter out unreasonable adsorbate-surface systems.
-        """
-        filtered_structures = []
-        for i in structures:
-            site, adslab = i
-            if is_adslab_structure_reasonable(adslab):
-                filtered_structures.append(i)
-        return filtered_structures
-
-    def _move_adsorbate_along_normal(
+    def _get_scaled_normal(
         self,
-        adsorbate_atoms: ase.Atoms,
-        adsorbate_height_step_size: float = 0.1,
+        adsorbate_slab_atoms: ase.Atoms,
+        site: np.ndarray,
+        adsorbate: ase.Atoms,
+        unit_normal: np.ndarray,
     ):
         """
         Translate the adsorbate along the surface normal so that it is proximate
@@ -217,33 +214,80 @@ class AdsorbateSlabConfig:
         more overlap.
 
         Args:
-            adsorbate_atoms (ase.Atoms): the adsorbate atoms copy which
-                is being manipulated during placement
+            adsorbate_slab_atoms (ase.Atoms): the initial adslab with poor placement
             adsorbate_height_step_size (float): [Agstroms] the added distance at each
                 translation of the adsorbate away from the surface
         """
-        # Comment(@abhshkdz): shouldn't surface normal be the unit vector along
-        # the cross product of a and b? atoms.cell[2] isn't guaranteed to be a
-        # surface normal, right?
-        # Eg see
-        # - https://github.com/materialsproject/pymatgen/blob/v2023.3.23/pymatgen/analysis/adsorption.py#L592
-        # - https://github.com/materialsproject/pymatgen/blob/v2023.3.23/pymatgen/analysis/adsorption.py#L293
-        surface_normal = self.slab.atoms.cell[2].copy()
-        scaled_surface_normal = (
-            surface_normal * adsorbate_height_step_size / np.linalg.norm(surface_normal)
-        )
+
+        atom_positions =  adsorbate_slab_atoms.get_positions()
 
         # See which atoms are closest
-        surface_atoms = self.slab.atoms[
-            [idx for idx, tag in enumerate(self.slab.atoms.get_tags()) if tag == 1]
-        ]
-        surface_atoms_tiled = custom_tile_atoms(surface_atoms)
+        closest_idxs, d_min, surf_pos = self._find_closest_combo(adsorbate_slab_atoms)
+        
+        # Solve for the intersection
+        u_ = atom_positions[closest_idxs[0]] - adsorbate.get_center_of_mass()
+        n1 = unit_normal[0]/unit_normal[2]
+        n2 = unit_normal[1]/unit_normal[2]
+        
+       
+        def fun(x):
+            return (surf_pos[0] - (site[0] + x*unit_normal[0] + u_[0]))**2 + (surf_pos[1] - (site[1] + x*unit_normal[1] + u_[1]))**2 + (surf_pos[2] - (site[2] + x*unit_normal[2] + u_[2]))**2 - (d_min+0.1)**2
+        
+        n_scale = fsolve(fun, d_min*3)
+        
+        return n_scale[0]
+            
+    def _find_closest_combo(self, adsorbate_slab_atoms):
+        """
+        Find the pair of surface and adsorbate atoms that are closest to one another.
+        Calculate the min distance between them (sum of atomic radii)
+        Args:
+            adsorbate_atoms (ase.atoms.Atoms): the adsorbate atoms object that has
+                been randomly placed far from the surface.
+        Returns:
+            (tuple): (surface_idx, adsorbate_idx) of the most proximate atoms.
+            (float): the minimum distance between the most proximate atoms.
+        """
+        adsorbate_idxs = [idx for idx,tag in enumerate(adsorbate_slab_atoms.get_tags()) if tag == 2]
+        surface_idxs = [idx for idx,tag in enumerate(adsorbate_slab_atoms.get_tags()) if tag == 1]
+        ads_slab_config_elements = adsorbate_slab_atoms.get_chemical_symbols()
+        
+        all_chemical_symbols = adsorbate_slab_atoms.get_chemical_symbols()
+        
+        pairs = list(product(adsorbate_idxs, surface_idxs))
+ 
+        post_radial_distances = []
 
-        # Comment(@abhshkdz): total_distance_traversed not used?
-        overlap_exists = there_is_overlap(adsorbate_atoms, surface_atoms_tiled)
-        while overlap_exists:
-            adsorbate_atoms.translate(scaled_surface_normal)
-            overlap_exists = there_is_overlap(adsorbate_atoms, surface_atoms_tiled)
+        for combo in pairs:
+            total_distance = adsorbate_slab_atoms.get_distance(combo[0], combo[1], mic = True)
+            post_radial_distance = (
+                total_distance
+                - covalent_radii[atomic_numbers[ads_slab_config_elements[combo[0]]]]
+                - covalent_radii[atomic_numbers[ads_slab_config_elements[combo[1]]]]
+            )
+            post_radial_distances.append(post_radial_distance)
+
+        closest_combo = pairs[post_radial_distances.index(min(post_radial_distances))]
+        min_interstitial_distance = (
+            covalent_radii[atomic_numbers[ads_slab_config_elements[closest_combo[0]]]]
+            + covalent_radii[atomic_numbers[ads_slab_config_elements[closest_combo[1]]]]
+        )
+        
+        min_distance = min(post_radial_distances) + min_interstitial_distance
+        surface_pos = adsorbate_slab_atoms.get_positions()[closest_combo[1]]
+        adsorbate_pos = adsorbate_slab_atoms.get_positions()[closest_combo[0]]
+        
+        #Get pbc corrected surface atom position if need be
+        if abs(adsorbate_slab_atoms.get_distance(closest_combo[0], closest_combo[1]) - min_distance) > 0.1:
+            repeats = list(product([-1, 0, 1], repeat=2))
+            repeats.remove((0, 0))   
+            for repeat in repeats:
+                pbc_corrected_pos = self.slab.atoms.cell[0]*repeat[0] + self.slab.atoms.cell[0]*repeat[1] + surface_pos
+                if abs(np.linalg.norm(pbc_corrected_pos- adsorbate_pos) - min_distance) < 0.1:
+                    break  
+            return closest_combo, min_interstitial_distance, pbc_corrected_pos
+        else:
+            return closest_combo, min_interstitial_distance, surface_pos
 
 
 def get_random_sites_on_triangle(
@@ -263,16 +307,6 @@ def get_random_sites_on_triangle(
         + r1_sqrt * r2 * vertices[2]
     )
     return [i for i in sites]
-
-
-def is_adslab_structure_reasonable(
-    adslab: ase.Atoms,
-):
-    """
-    Check if the adsorbate-surface system is reasonable.
-    """
-    # Comment(@abhshkdz): This is a placeholder for now.
-    return True
 
 
 def custom_tile_atoms(atoms: ase.Atoms):
@@ -337,3 +371,5 @@ def there_is_overlap(adsorbate_atoms: ase.Atoms, surface_atoms_tiled: ase.Atoms)
         )
         unintersected_post_radial_distances.append(post_radial_distance >= 0)
     return not all(unintersected_post_radial_distances)
+
+
