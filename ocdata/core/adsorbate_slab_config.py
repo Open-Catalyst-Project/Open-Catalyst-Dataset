@@ -30,9 +30,25 @@ class AdsorbateSlabConfig:
     num_augmentations_per_site: int
         Number of augmentations of the adsorbate per site. Total number of
         generated structures will be `num_sites` * `num_augmentations_per_site`.
-    adsorbate_height_step_size: float
-        Distance in Angstroms to add to the height of placement incrementally
-        until there is no atomic overlap.
+    interstitial_gap: float
+        Minimum distance in Angstroms between adsorbate and slab atoms.
+    mode: str
+        "random" or "heuristic".
+        This affects surface site sampling and adsorbate placement on each site.
+
+        In "random", we do a Delaunay triangulation of the surface atoms, then
+        sample sites uniformly at random within each triangle. When placing the
+        adsorbate, we randomly rotate it along xyz, and place it such that the
+        center of mass is at the site.
+
+        In "heuristic", we use Pymatgen's AdsorbateSiteFinder to find the most
+        energetically favorable sites, i.e., ontop, bridge, or hollow sites.
+        When placing the adsorbate, we randomly rotate it along z with only
+        slight rotation along x and y, and place it such that the binding atom
+        is at the site.
+
+        In both cases, the adsorbate is placed at the closest position of no
+        overlap with the slab plus `interstitial_gap` along the surface normal.
     """
 
     def __init__(
