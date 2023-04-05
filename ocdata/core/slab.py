@@ -323,7 +323,7 @@ def find_surface_atoms_with_voronoi(bulk_atoms, slab_atoms):
 
 def calculate_center_of_mass(struct):
     """
-    Determine the surface atoms indices from here
+    Calculates the center of mass of the slab.
     """
     weights = [site.species.weight for site in struct]
     center_of_mass = np.average(struct.frac_coords, weights=weights, axis=0)
