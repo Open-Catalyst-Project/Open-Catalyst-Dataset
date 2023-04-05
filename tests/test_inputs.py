@@ -1,5 +1,6 @@
 import random
 
+import numpy as np
 import pytest
 
 from ocdata.core import Adsorbate, AdsorbateSlabConfig, Bulk, Slab
@@ -8,6 +9,9 @@ from ocdata.utils.vasp import VASP_FLAGS, _clean_up_inputs
 
 @pytest.fixture(scope="class")
 def load_data(request):
+    random.seed(1)
+    np.random.seed(1)
+
     bulk_sample_1 = Bulk(bulk_id_from_db=24)
     slab_sample_1 = Slab.from_bulk_get_random_slab(bulk_sample_1)
     adsorbate_sample_1 = Adsorbate(adsorbate_id_from_db=10)
