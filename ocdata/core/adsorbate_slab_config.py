@@ -15,7 +15,8 @@ from ocdata.core import Adsorbate, Slab
 from ocdata.core.adsorbate import randomly_rotate_adsorbate
 
 import warnings
-warnings.filterwarnings('ignore', 'The iteration is not making good progress')
+
+# warnings.filterwarnings("ignore", "The iteration is not making good progress")
 
 
 class AdsorbateSlabConfig:
@@ -205,31 +206,27 @@ class AdsorbateSlabConfig:
         translation_vector = site - placement_center
         adsorbate_c.translate(translation_vector)
 
-        # Translate the adsorbate by the normal so it is far away
+        # Translate the adsorbate by the normal so has no intersections
         normal = np.cross(self.slab.atoms.cell[0], self.slab.atoms.cell[1])
         unit_normal = normal / np.linalg.norm(normal)
-        adsorbate_c2 = adsorbate_c.copy()
-
-        adsorbate_slab_config = slab_c + adsorbate_c # CLEAN THIS UP LETS PASS THE OBJECTS SEPARATELY
-        tags = [2] * len(adsorbate_c)
-        final_tags = list(slab_c.get_tags()) + tags
-        adsorbate_slab_config.set_tags(final_tags)
-        adsorbate_slab_config.cell = slab_c.cell 
-        adsorbate_slab_config.pbc = [True, True, False]
 
         scaled_normal = self._get_scaled_normal(
-            adsorbate_slab_config,
-            site,
             adsorbate_c,
+            slab_c,
+            site,
             unit_normal,
             interstitial_gap,
         )
-        adsorbate_c2.translate(scaled_normal * unit_normal)
-        adsorbate_slab_config = slab_c + adsorbate_c2
+        adsorbate_c.translate(scaled_normal * unit_normal)
+        adsorbate_slab_config = slab_c + adsorbate_c
+        tags = [2] * len(adsorbate_c)
+        final_tags = list(slab_c.get_tags()) + tags
         adsorbate_slab_config.set_tags(final_tags)
 
         # Set pbc and cell.
-        adsorbate_slab_config.cell = slab_c.cell # Comment (@brookwander): I think this is unnecessary?
+        adsorbate_slab_config.cell = (
+            slab_c.cell
+        )  # Comment (@brookwander): I think this is unnecessary?
         adsorbate_slab_config.pbc = [True, True, False]
         return adsorbate_slab_config
 
@@ -251,42 +248,57 @@ class AdsorbateSlabConfig:
 
     def _get_scaled_normal(
         self,
-        adsorbate_slab_atoms: ase.Atoms,
+        adsorbate_c: ase.Atoms,
+        slab_c: ase.Atoms,
         site: np.ndarray,
-        adsorbate_atoms: ase.Atoms,
         unit_normal: np.ndarray,
         interstitial_gap: float = 0.1,
     ):
         """
-        Translate the adsorbate along the surface normal so that it is proximate
-        to the surface but there is no atomic overlap by explicitly solving for the
-        point of intersection
+        Get the scaled normal that gives a proximate configuration without atomic
+        overlap by:
+            1. Projecting the adsorbate and surface atoms onto the surface plane.
+            2. Identify all adsorbate atom - surface atom combinations for which
+                an itersection when translating along the normal would occur.
+                This is where the distance between the projected points is less than
+                r_surface_atom + r_adsorbate_atom
+            3. Explicitly solve for the scaled normal at which the distance between
+                surface atom and adsorbate atom = r_surface_atom + r_adsorbate_atom +
+                interstitial_gap. This exploits the superposition of vectors and the
+                distance formula, so it requires root finding.
 
         Args:
-            adsorbate_slab_atoms (ase.Atoms): the initial adslab with poor placement
+            adsorbate_c (ase.Atoms): A copy of the adsorbate with coordinates at the site
+            slab_c (ase.Atoms): A copy of the slab
             site (np.ndarray): the coordinate of the site
             adsorbate_atoms (ase.Atoms): the translated adsorbate
             unit_normal (np.ndarray): the unit vector normal to the surface
             interstitial_gap (float): the desired distance between the covalent radii of the
                 closest surface and adsorbate atom
         Returns:
-            (float): the scaled normal vector for proper placement
+            (float): the magnitude of the normal vector for placement
         """
         # Center everthing about the site so we dont need to deal with pbc issues
-        scaled_site_position = np.linalg.solve(adsorbate_slab_atoms.cell.complete().T, site).T
-        atom_positions = wrap_positions(adsorbate_slab_atoms.get_positions(), adsorbate_slab_atoms.cell, center = (scaled_site_position[0], scaled_site_position[0], 0.5))
-        adsorbate_slab_atoms.set_positions(atom_positions)
-        
+        slab_c2 = slab_c.copy()
+        scaled_site_position = np.linalg.solve(slab_c2.cell.complete().T, site).T
+        slab_positions = wrap_positions(
+            slab_c2.get_positions(),
+            slab_c2.cell,
+            center=(scaled_site_position[0], scaled_site_position[0], 0.5),
+        )
+        slab_c2.set_positions(slab_positions)
+        adsorbate_positions = adsorbate_c.get_positions()
+
         # See which combos have a possible intersection event
-        combos = self._find_combos_to_check(adsorbate_slab_atoms, unit_normal)
+        combos = self._find_combos_to_check(adsorbate_c, slab_c2, unit_normal)
 
         # Solve for the intersections
         if self.mode == "random":
-            placement_center = adsorbate_atoms.get_center_of_mass()
+            placement_center = adsorbate_c.get_center_of_mass()
         elif self.mode == "heuristic":
-            binding_idx = self.adsorbate.binding_indices[0]
-            placement_center = adsorbate_atoms.positions[binding_idx]
-        
+            binding_idx = adsorbate_c.binding_indices[0]
+            placement_center = adsorbate_c.positions[binding_idx]
+
         def fun(x):
             return (
                 (surf_pos[0] - (site[0] + x * unit_normal[0] + u_[0])) ** 2
@@ -294,64 +306,96 @@ class AdsorbateSlabConfig:
                 + (surf_pos[2] - (site[2] + x * unit_normal[2] + u_[2])) ** 2
                 - (d_min + interstitial_gap) ** 2
             )
+
         if len(combos) > 0:
             scaled_norms = []
             for combo in combos:
                 closest_idxs, d_min, surf_pos = combo
-                u_ = atom_positions[closest_idxs[0]] - placement_center
+
+                u_ = adsorbate_positions[closest_idxs[0]] - placement_center
                 n_scale = fsolve(fun, d_min * 3)
                 scaled_norms.append(n_scale[0])
-
             return max(scaled_norms)
-        else:
-            return 0 # if there are no possible surface itersections, place it at the site
 
-    def _find_combos_to_check(self, adsorbate_slab_atoms, normal_vector):
+        else:  # Comment(@brookwander): this is a kinda scary edge case
+            return (
+                0  # if there are no possible surface itersections, place it at the site
+            )
+
+    def _find_combos_to_check(
+        self, adsorbate_c: ase.Atoms, slab_c2: ase.Atoms, unit_normal: np.ndarray
+    ):
         """
-        REDO**
-        Find the pair of surface and adsorbate atoms that are closest to one another.
-        Calculate the min distance between them (sum of atomic radii)
+        Find the pairs of surface and adsorbate atoms that would have an intersection event
+        while traversing the normal vector. For each pair, return pertanent information for
+        finding the point of intersection.
         Args:
-            adsorbate_slab_atoms (ase.atoms.Atoms): the adsorbate-slab atoms configuration.
-        Returns:
-            (tuple): (surface_idx, adsorbate_idx) of the most proximate atoms.
-            (float): the minimum distance between the most proximate atoms.
-            (np.ndarray): coordinate of the most proximate surface atom with corrections for pbc
-                if they are required.
-        """
-        adsorbate_idxs = [
-            idx for idx, tag in enumerate(adsorbate_slab_atoms.get_tags()) if tag == 2
-        ]
-        surface_idxs = [
-            idx for idx, tag in enumerate(adsorbate_slab_atoms.get_tags()) if tag == 1
-        ]
-        ads_slab_config_elements = adsorbate_slab_atoms.get_chemical_symbols()
-        ads_slab_positions = adsorbate_slab_atoms.get_positions()
-        projected_points = self._get_projected_points(adsorbate_slab_atoms, normal_vector)
+            adsorbate_c (ase.Atoms): A copy of the adsorbate with coordinates at the site
+            slab_c2 (ase.Atoms): A copy of the slab with atoms wrapped s.t. things are centered
+                about the site
+            unit_normal (np.ndarray): the unit vector normal to the surface
 
-        pairs = list(product(adsorbate_idxs, surface_idxs))
-        
+        Returns:
+            (list[lists]): each entry in the list corresponds to one pair to check. With the
+                following information:
+                    [(adsorbate_idx, slab_idx), r_adsorbate_atom + r_slab_atom, slab_atom_position]
+        """
+        adsorbate_elements = adsorbate_c.get_chemical_symbols()
+        slab_elements = slab_c2.get_chemical_symbols()
+        projected_points = self._get_projected_points(adsorbate_c, slab_c2, unit_normal)
+
+        pairs = list(product(list(range(len(adsorbate_c))), list(range(len(slab_c2)))))
+
         combos_to_check = []
         for combo in pairs:
-            distance = np.linalg.norm(projected_points[combo[0]] - projected_points[combo[1]])
-            radial_distance = covalent_radii[atomic_numbers[ads_slab_config_elements[combo[0]]]] + covalent_radii[atomic_numbers[ads_slab_config_elements[combo[1]]]]
+            distance = np.linalg.norm(
+                projected_points["ads"][combo[0]] - projected_points["slab"][combo[1]]
+            )
+            radial_distance = (
+                covalent_radii[atomic_numbers[adsorbate_elements[combo[0]]]]
+                + covalent_radii[atomic_numbers[slab_elements[combo[1]]]]
+            )
             if distance <= radial_distance:
-                combos_to_check.append([combo, radial_distance, ads_slab_positions[combo[1]]])
+                combos_to_check.append(
+                    [combo, radial_distance, slab_c2.positions[combo[1]]]
+                )
         return combos_to_check
-        
-    def _get_projected_points(self, adsorbate_slab_config, normal_vector):
-        projected_points = []
-        point_on_surface = adsorbate_slab_config.cell[0]
-        atom_positions = adsorbate_slab_config.get_positions()
-        for idx, atom in enumerate(adsorbate_slab_config):
-            v_ = atom_positions[idx] - point_on_surface
+
+    def _get_projected_points(
+        self, adsorbate_c: ase.Atoms, slab_c2: ase.Atoms, unit_normal: np.ndarray
+    ):
+        """
+        Find the x and y coordinates of each atom projected onto the surface plane.
+        Args:
+            adsorbate_c (ase.Atoms): A copy of the adsorbate with coordinates at the site
+            slab_c2 (ase.Atoms): A copy of the slab with atoms wrapped s.t. things are centered
+                about the site
+            unit_normal (np.ndarray): the unit vector normal to the surface
+
+        Returns:
+            (dict): {"ads": [[x1, y1], [x2, y2], ...], "slab": [[x1, y1], [x2, y2], ...],}
+        """
+        projected_points = {"ads": [], "slab": []}
+        point_on_surface = slab_c2.cell[0]
+        for atom_position in adsorbate_c.positions:
+            v_ = atom_position - point_on_surface
             projected_point = point_on_surface + (
                 v_
-                - (np.dot(v_, normal_vector) / np.linalg.norm(normal_vector) ** 2)
-                * normal_vector
+                - (np.dot(v_, unit_normal) / np.linalg.norm(unit_normal) ** 2)
+                * unit_normal
             )
-            projected_points.append(projected_point[0:2])
+            projected_points["ads"].append(projected_point[0:2])
+
+        for atom_position in slab_c2.positions:
+            v_ = atom_position - point_on_surface
+            projected_point = point_on_surface + (
+                v_
+                - (np.dot(v_, unit_normal) / np.linalg.norm(unit_normal) ** 2)
+                * unit_normal
+            )
+            projected_points["slab"].append(projected_point[0:2])
         return projected_points
+
 
 def get_random_sites_on_triangle(
     vertices: np.ndarray,
