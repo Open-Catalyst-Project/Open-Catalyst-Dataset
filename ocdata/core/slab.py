@@ -126,6 +126,21 @@ class Slab:
     def has_surface_tagged(self):
         return np.any(self.atoms.get_tags() == 1)
 
+    def get_metadata_dict(self):
+        """
+        Returns a dict containing the atoms object and metadata,
+        used for writing to files.
+        """
+        return {
+            "slab_atomsobject": self.atoms,
+            "slab_metadata": {
+                "bulk_id": self.bulk.src_id,
+                "millers": self.millers,
+                "shift": self.shift,
+                "top": self.top,
+            },
+        }
+
     def __len__(self):
         return len(self.atoms)
 

@@ -21,7 +21,7 @@ import warnings
 
 class AdsorbateSlabConfig:
     """
-    Initializes an adsorbate-catalyst system for a given Adsorbate and Slab.
+    Initializes a list of adsorbate-catalyst systems for a given Adsorbate and Slab.
 
     Arguments
     ---------
@@ -296,7 +296,7 @@ class AdsorbateSlabConfig:
         if self.mode == "random":
             placement_center = adsorbate_c.get_center_of_mass()
         elif self.mode == "heuristic":
-            binding_idx = adsorbate_c.binding_indices[0]
+            binding_idx = self.adsorbate.binding_indices[0]
             placement_center = adsorbate_c.positions[binding_idx]
 
         def fun(x):
@@ -395,6 +395,22 @@ class AdsorbateSlabConfig:
             )
             projected_points["slab"].append(projected_point[0:2])
         return projected_points
+
+    def get_metadata_dict(self, ind):
+        """
+        Returns a dict containing the atoms object and metadata for
+        one specified config, used for writing to files.
+        """
+        return {
+            "adsorbed_slab_atomsobject": self.atoms_list[ind],
+            "adsorbed_slab_metadata": {
+                "bulk_id": self.slab.bulk.src_id,
+                "millers": self.slab.millers,
+                "shift": self.slab.shift,
+                "top": self.slab.top,
+                "smiles": self.adsorbate.smiles,
+            },
+        }
 
 
 def get_random_sites_on_triangle(
