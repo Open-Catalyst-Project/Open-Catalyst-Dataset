@@ -161,20 +161,22 @@ class AdsorbateSlabConfig:
             adsorbate_c.translate(translation_vector)
         else:
             raise NotImplementedError
-        
+
         # Translate the adsorbate by the normal so it is far away
         normal = np.cross(self.slab.atoms.cell[0], self.slab.atoms.cell[1])
         unit_normal = normal / np.linalg.norm(normal)
         adsorbate_c2 = adsorbate_c.copy()
-        adsorbate_c.translate(unit_normal*5)
-        
+        adsorbate_c.translate(unit_normal * 5)
+
         adsorbate_slab_config = slab_c + adsorbate_c
         tags = [2] * len(adsorbate_c)
         final_tags = list(slab_c.get_tags()) + tags
         adsorbate_slab_config.set_tags(final_tags)
-        
-        scaled_normal = self._get_scaled_normal(adsorbate_slab_config, site, adsorbate_c, unit_normal)
-        adsorbate_c2.translate(scaled_normal*unit_normal)
+
+        scaled_normal = self._get_scaled_normal(
+            adsorbate_slab_config, site, adsorbate_c, unit_normal
+        )
+        adsorbate_c2.translate(scaled_normal * unit_normal)
         adsorbate_slab_config = slab_c + adsorbate_c2
         adsorbate_slab_config.set_tags(final_tags)
 
@@ -204,62 +206,72 @@ class AdsorbateSlabConfig:
         self,
         adsorbate_slab_atoms: ase.Atoms,
         site: np.ndarray,
-        adsorbate: ase.Atoms,
+        translation_vector: np.ndarray,
         unit_normal: np.ndarray,
     ):
         """
         Translate the adsorbate along the surface normal so that it is proximate
-        to the surface but there is no atomic overlap by iteratively moving the
-        adsorbate away from the surface, along its normal, until there is no
-        more overlap.
+        to the surface but there is no atomic overlap by explicitly solving for the
+        point of intersection
 
         Args:
             adsorbate_slab_atoms (ase.Atoms): the initial adslab with poor placement
-            adsorbate_height_step_size (float): [Agstroms] the added distance at each
-                translation of the adsorbate away from the surface
+            site (np.ndarray): the coordinate of the site
+            translation_vector (np.ndarray): the vector used to translate the adsorbate so the
+                placement reference lies at (0,0,0)
+            unit_normal (np.ndarray): the unit vector normal to the surface
         """
 
-        atom_positions =  adsorbate_slab_atoms.get_positions()
+        atom_positions = adsorbate_slab_atoms.get_positions()
 
         # See which atoms are closest
         closest_idxs, d_min, surf_pos = self._find_closest_combo(adsorbate_slab_atoms)
-        
+
         # Solve for the intersection
-        u_ = atom_positions[closest_idxs[0]] - adsorbate.get_center_of_mass()
-        n1 = unit_normal[0]/unit_normal[2]
-        n2 = unit_normal[1]/unit_normal[2]
-        
-       
+        u_ = atom_positions[closest_idxs[0]] + translation_vector - site
+
         def fun(x):
-            return (surf_pos[0] - (site[0] + x*unit_normal[0] + u_[0]))**2 + (surf_pos[1] - (site[1] + x*unit_normal[1] + u_[1]))**2 + (surf_pos[2] - (site[2] + x*unit_normal[2] + u_[2]))**2 - (d_min+0.1)**2
-        
-        n_scale = fsolve(fun, d_min*3)
-        
+            return (
+                (surf_pos[0] - (site[0] + x * unit_normal[0] + u_[0])) ** 2
+                + (surf_pos[1] - (site[1] + x * unit_normal[1] + u_[1])) ** 2
+                + (surf_pos[2] - (site[2] + x * unit_normal[2] + u_[2])) ** 2
+                - (d_min + 0.1) ** 2
+            )
+
+        n_scale = fsolve(fun, d_min * 3)
+
         return n_scale[0]
-            
+
     def _find_closest_combo(self, adsorbate_slab_atoms):
         """
         Find the pair of surface and adsorbate atoms that are closest to one another.
         Calculate the min distance between them (sum of atomic radii)
         Args:
-            adsorbate_atoms (ase.atoms.Atoms): the adsorbate atoms object that has
-                been randomly placed far from the surface.
+            adsorbate_slab_atoms (ase.atoms.Atoms): the adsorbate-slab atoms configuration.
         Returns:
             (tuple): (surface_idx, adsorbate_idx) of the most proximate atoms.
             (float): the minimum distance between the most proximate atoms.
+            (np.ndarray): coordinate of the most proximate surface atom with corrections for pbc
+                if they are required.
         """
-        adsorbate_idxs = [idx for idx,tag in enumerate(adsorbate_slab_atoms.get_tags()) if tag == 2]
-        surface_idxs = [idx for idx,tag in enumerate(adsorbate_slab_atoms.get_tags()) if tag == 1]
+        adsorbate_idxs = [
+            idx for idx, tag in enumerate(adsorbate_slab_atoms.get_tags()) if tag == 2
+        ]
+        surface_idxs = [
+            idx for idx, tag in enumerate(adsorbate_slab_atoms.get_tags()) if tag == 1
+        ]
         ads_slab_config_elements = adsorbate_slab_atoms.get_chemical_symbols()
-        
+
         all_chemical_symbols = adsorbate_slab_atoms.get_chemical_symbols()
-        
+
         pairs = list(product(adsorbate_idxs, surface_idxs))
- 
+
         post_radial_distances = []
 
         for combo in pairs:
-            total_distance = adsorbate_slab_atoms.get_distance(combo[0], combo[1], mic = True)
+            total_distance = adsorbate_slab_atoms.get_distance(
+                combo[0], combo[1], mic=True
+            )
             post_radial_distance = (
                 total_distance
                 - covalent_radii[atomic_numbers[ads_slab_config_elements[combo[0]]]]
@@ -272,19 +284,34 @@ class AdsorbateSlabConfig:
             covalent_radii[atomic_numbers[ads_slab_config_elements[closest_combo[0]]]]
             + covalent_radii[atomic_numbers[ads_slab_config_elements[closest_combo[1]]]]
         )
-        
+
         min_distance = min(post_radial_distances) + min_interstitial_distance
         surface_pos = adsorbate_slab_atoms.get_positions()[closest_combo[1]]
         adsorbate_pos = adsorbate_slab_atoms.get_positions()[closest_combo[0]]
-        
-        #Get pbc corrected surface atom position if need be
-        if abs(adsorbate_slab_atoms.get_distance(closest_combo[0], closest_combo[1]) - min_distance) > 0.1:
+
+        # Get pbc corrected surface atom position if need be
+        if (
+            abs(
+                adsorbate_slab_atoms.get_distance(closest_combo[0], closest_combo[1])
+                - min_distance
+            )
+            > 0.1
+        ):
             repeats = list(product([-1, 0, 1], repeat=2))
-            repeats.remove((0, 0))   
+            repeats.remove((0, 0))
             for repeat in repeats:
-                pbc_corrected_pos = self.slab.atoms.cell[0]*repeat[0] + self.slab.atoms.cell[0]*repeat[1] + surface_pos
-                if abs(np.linalg.norm(pbc_corrected_pos- adsorbate_pos) - min_distance) < 0.1:
-                    break  
+                pbc_corrected_pos = (
+                    self.slab.atoms.cell[0] * repeat[0]
+                    + self.slab.atoms.cell[0] * repeat[1]
+                    + surface_pos
+                )
+                if (
+                    abs(
+                        np.linalg.norm(pbc_corrected_pos - adsorbate_pos) - min_distance
+                    )
+                    < 0.1
+                ):
+                    break
             return closest_combo, min_interstitial_distance, pbc_corrected_pos
         else:
             return closest_combo, min_interstitial_distance, surface_pos
@@ -371,5 +398,3 @@ def there_is_overlap(adsorbate_atoms: ase.Atoms, surface_atoms_tiled: ase.Atoms)
         )
         unintersected_post_radial_distances.append(post_radial_distance >= 0)
     return not all(unintersected_post_radial_distances)
-
-
