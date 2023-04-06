@@ -3,13 +3,11 @@ import logging
 import warnings
 from itertools import product
 
+import ase
 import numpy as np
 import scipy
-
-import ase
 from ase.data import atomic_numbers, covalent_radii
 from ase.geometry import wrap_positions
-
 from pymatgen.analysis.adsorption import AdsorbateSiteFinder
 from pymatgen.io.ase import AseAtomsAdaptor
 from scipy.optimize import fsolve
@@ -524,4 +522,4 @@ def there_is_overlap(adsorbate_slab_config: ase.Atoms):
         (bool): True if there is atomic overlap, otherwise False
     """
     post_radial_distances = get_interstitial_distances(adsorbate_slab_config)
-    not all(np.array(post_radial_distances) >= 0)
+    return not all(np.array(post_radial_distances) >= 0)
