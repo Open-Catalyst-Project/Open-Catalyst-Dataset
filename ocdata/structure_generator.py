@@ -1,67 +1,58 @@
 import argparse
 import logging
+import numpy as np
 import os
 import pickle
 import time
 
-import numpy as np
-
+from ocdata.core import Adsorbate, Bulk, Slab, AdsorbateSlabConfig
 from ocdata.utils.vasp import write_vasp_input_files
 
-from ocdata.core import Adsorbate, Bulk, Slab, AdsorbateSlabConfig
-
-'''
-test commands
-
-python structure_generator.py \
---bulk_db databases/pkls/bulks.pkl \
---adsorbate_db databases/pkls/adsorbates.pkl \
---precomputed_slabs_dir /checkpoint/janlan/ocp/input_dbs/precomputed_surfaces_2021Sep20/ \
---adsorbate_index 1 --bulk_index 0 --surface_index 0 \
---output_dir junktest/ \
---random_placements --random_sites 10 --num_augmentations 2 --heuristic_placements \
---no_vasp
-'''
 
 class StructureGenerator:
     """
-    A class that creates adsorbate/bulk/surface objects and
-    writes vasp input files for one of the following options:
-    - all placements for one specified adsorbate, one specified bulk, one specified surface
-        (random, heuristic, or both)
-    - optional extensions: loop over a list of adsorbates
+    A class that creates adsorbate/bulk/slab objects given specified indices,
+    and writes vasp input files and metadata for multiple placements of the adsorbate
+    on the slab. You can choose random, heuristic, or both types of placements.
 
-    The output directory structure will look like the following:
-    - For sampling a random structure, the directories will be `random{seed}/surface` and
-        `random{seed}/adslab` for the surface alone and the adsorbate+surface, respectively.
-    - For enumerating all structures, the directories will be `{adsorbate}_{bulk}_{surface}/surface`
-        and `{adsorbate}_{bulk}_{surface}/adslab{config}`, where everything in braces are the
-        respective indices.
+    The output directory structure will have the following nested structure,
+    where "files" represents the vasp input files and the metadata.pkl:
+        outputdir/
+            bulk0/
+                surface0/
+                    surface/files
+                    ads0/
+                        heur0/files
+                        heur1/files
+                        rand0/files
+                        ...
+                    ads1/
+                        ...
+                surface1/
+                    ...
+            bulk1/
+                ...
 
-    Attributes
+    Arguments
     ----------
-    args : argparse.Namespace
-        contains all command line args
-    logger : logging.RootLogger
-        logging class to print info
-    adsorbate : Adsorbate
-        the selected adsorbate object
-    all_bulks : list
-        list of `Bulk` objects
-    bulk_indices_list : list
-        list of specified bulk indices (ints) that we want to select
-
-    Public methods
-    --------------
-    run()
-        selects the appropriate materials and writes to files
+    args: argparse.Namespace
+        Contains all command line args
+    bulk_index: int
+        Index of the bulk within the bulk db
+    surface_index: int
+        Index of the surface in the list of all possible surfaces
+    adsorbate_index: int
+        Index of the adsorbate within the adsorbate db
     """
 
-    def __init__(self, args):
+    def __init__(self, args, bulk_index, surface_index, adsorbate_index):
         """
         Set up args from argparse, random seed, and logging.
         """
         self.args = args
+        self.bulk_index = bulk_index
+        self.surface_index = surface_index
+        self.adsorbate_index = adsorbate_index
 
         self.logger = logging.getLogger()
         logging.basicConfig(
@@ -70,22 +61,23 @@ class StructureGenerator:
         self.logger.setLevel(logging.INFO if self.args.verbose else logging.WARNING)
 
         self.logger.info(
-            f"Processing adsorbate {self.args.adsorbate_index}, bulk {self.args.bulk_index}, surface {self.args.surface_index}"
+            f"Starting adsorbate {self.adsorbate_index}, bulk {self.bulk_index}, surface {self.surface_index}"
         )
         if self.args.seed:
             np.random.seed(self.args.seed)
 
     def run(self):
         """
-        Generates adsorbate/bulk/surface objects and writes to files.
+        Create adsorbate/bulk/surface objects, generate adslab placements,
+        and write to files.
         """
         start = time.time()
 
         # create adsorbate, bulk, and surface objects
-        self.bulk = Bulk(bulk_id_from_db=self.args.bulk_index, bulk_db_path=self.args.bulk_db)
-        self.adsorbate = Adsorbate(adsorbate_id_from_db=self.args.bulk_index, adsorbate_db_path=self.args.adsorbate_db)
+        self.bulk = Bulk(bulk_id_from_db=self.bulk_index, bulk_db_path=self.args.bulk_db)
+        self.adsorbate = Adsorbate(adsorbate_id_from_db=self.adsorbate_index, adsorbate_db_path=self.args.adsorbate_db)
         all_slabs = self.bulk.get_slabs(max_miller=self.args.max_miller, precomputed_slabs_dir=self.args.precomputed_slabs_dir)
-        self.slab = all_slabs[self.args.surface_index]
+        self.slab = all_slabs[self.surface_index]
 
         # create adslabs
         self.rand_adslabs, self.heur_adslabs = None, None
@@ -96,71 +88,60 @@ class StructureGenerator:
             self.rand_adslabs = AdsorbateSlabConfig(self.slab, self.adsorbate, 
                 self.args.random_sites, self.args.num_augmentations, mode="random")
 
-        self.write_surface()
+        # write files
+        self._write_surface()
         if self.heur_adslabs:
-            self.write_adslabs(self.heur_adslabs, "heur")
+            self._write_adslabs(self.heur_adslabs, "heur")
         if self.rand_adslabs:
-            self.write_adslabs(self.rand_adslabs, "rand")
+            self._write_adslabs(self.rand_adslabs, "rand")
 
         end = time.time()
-        self.logger.info(f"Done! ({round(end - start, 2)}s)")
+        self.logger.info(f"Completed adsorbate {self.adsorbate_index}, bulk {self.bulk_index}, surface {self.surface_index} ({round(end - start, 2)}s)")
 
-    def write_surface(self):
+    def _write_surface(self):
         """
-        outputdir/
-            bulk0/
-                surface0/
-                    surface/POSCAR
-                    heur0/POSCAR
-                    heur1/POSCAR
-                    rand0/POSCAR
-                    ...
-                surface1/
-                    ...
-            bulk1/
-                ...
+        Writes vasp inputs and metadata for the slab alone
         """
 
-        os.makedirs(os.path.join(self.args.output_dir, f"bulk{self.args.bulk_index}"),
+        os.makedirs(os.path.join(self.args.output_dir, f"bulk{self.bulk_index}"),
             exist_ok=True)
-        os.makedirs(os.path.join(self.args.output_dir, f"bulk{self.args.bulk_index}",
-            f"surface{self.args.surface_index}"), exist_ok=True)
+        os.makedirs(os.path.join(self.args.output_dir, f"bulk{self.bulk_index}",
+            f"surface{self.surface_index}"), exist_ok=True)
 
         # write vasp files
-        slab_alone_dir = os.path.join(self.args.output_dir, f"bulk{self.args.bulk_index}",
-            f"surface{self.args.surface_index}", "surface")
+        slab_alone_dir = os.path.join(self.args.output_dir, f"bulk{self.bulk_index}",
+            f"surface{self.surface_index}", "surface")
         if not os.path.exists(os.path.join(slab_alone_dir, "POSCAR")):
-            # skip surface if already written.
-            # this happens when we process multiple adsorbates per surface
+            # Skip surface if already written;
+            # this happens when we process multiple adsorbates per surface.
             write_vasp_input_files(self.slab.atoms, slab_alone_dir)
-            # we don't take out files for self.args.no_vasp because
-            # we do want to run vasp on these surface files
 
         # write metadata
-        metadata_path = os.path.join(self.args.output_dir, f"bulk{self.args.bulk_index}",
-            f"surface{self.args.surface_index}", "surface", "metadata.pkl")
+        metadata_path = os.path.join(self.args.output_dir, f"bulk{self.bulk_index}",
+            f"surface{self.surface_index}", "surface", "metadata.pkl")
         if not os.path.exists(metadata_path):
             metadata_dict = self.slab.get_metadata_dict()
             with open(metadata_path, "wb") as f:
                 pickle.dump(metadata_dict, f)
 
-    def write_adslabs(self, adslab_obj, mode_str):
-        # write adslabs, either random or heuristic
-        # see dir structure in write_surface()
+    def _write_adslabs(self, adslab_obj, mode_str):
+        """
+        Write one set of adslabs (called separately for random and heurstic placements)
+        """
         for adslab_ind, adslab_atoms in enumerate(adslab_obj.atoms_list):
-            adslab_dir = os.path.join(self.args.output_dir, f"bulk{self.args.bulk_index}",
-                f"surface{self.args.surface_index}", f"{mode_str}{adslab_ind}")
+            adslab_dir = os.path.join(self.args.output_dir, f"bulk{self.bulk_index}",
+                f"surface{self.surface_index}", f"ads{self.adsorbate.adsorbate_id_from_db}",
+                f"{mode_str}{adslab_ind}")
 
             # vasp files
             write_vasp_input_files(adslab_atoms, adslab_dir)
             if self.args.no_vasp:
-                # a bit hacky but ASE defaults to writing everything out
+                # A bit hacky but ASE defaults to writing everything out.
                 for unused_file in ["KPOINTS", "INCAR", "POTCAR"]:
                     os.remove(os.path.join(adslab_dir, unused_file))
 
             # write dict for metadata
-            metadata_path = os.path.join(self.args.output_dir, f"bulk{self.args.bulk_index}",
-                f"surface{self.args.surface_index}", f"{mode_str}{adslab_ind}", "metadata.pkl")
+            metadata_path = os.path.join(adslab_dir, "metadata.pkl")
             metadata_dict = adslab_obj.get_metadata_dict(adslab_ind)
             with open(metadata_path, "wb") as f:
                 pickle.dump(metadata_dict, f)
@@ -184,7 +165,7 @@ def parse_args():
         help="Root directory of precomputed surfaces",
     )
 
-    # material specifications
+    # material specifications, option A: provide one set of indices
     parser.add_argument(
         "--adsorbate_index", type=int, default=None, help="Adsorbate index (int)"
     )
@@ -193,6 +174,17 @@ def parse_args():
     )
     parser.add_argument(
         "--surface_index", type=int, default=None, help="Surface index (int)"
+    )
+
+    # material specifications, option B: provide one set of indices
+    parser.add_argument(
+        "--indices_file", type=str, default=None, help="File containing adsorbate_bulk_surface indices"
+    )
+    parser.add_argument(
+        "--chunk_index", type=int, default=None, help="Row(s) in file to run"
+    )
+    parser.add_argument(
+        "--chunk_size", type=int, default=1, help="Chunk size for parallelization"
     )
 
     # output
@@ -238,13 +230,13 @@ def parse_args():
         help="Random seed for sampling/random sites generation",
     )
     parser.add_argument(
-        "--verbose", action="store_true", default=False, help="Log detailed info"
-    )
-    parser.add_argument(
         "--no_vasp",
         action="store_true",
         default=False,
         help="Do not write out POTCAR/INCAR/KPOINTS for adslabs",
+    )
+    parser.add_argument(
+        "--verbose", action="store_true", default=False, help="Log detailed info"
     )
 
     args = parser.parse_args()
@@ -254,14 +246,43 @@ def parse_args():
         parser.error("Must choose either or both of random or heuristic placements")
     if args.random_placements and (args.random_sites is None or args.random_sites <= 0):
         parser.error("Must specify number of sites for random placements")
+    if not args.indices_file:
+        if args.adsorbate_index is None or args.bulk_index is None or args.surface_index is None:
+            parser.error("Must provide a file or specify all material indices")
 
     return args
 
 
 if __name__ == "__main__":
-    # This handles one adsorbate-surface material
-    # to handle files, write a different wrapper that reads in lines
-    # and manually sets the args.*_index variables
+    """
+    This script allows you to either pass in the bulk/surface/adsorbate indices,
+    or read from a file containing multiple sets of indices, which you can also
+    break up into chunks for parallelizaiton.
+    """
     args = parse_args()
-    job = StructureGenerator(args)
-    job.run()
+
+    if args.indices_file:
+        with open(args.indices_file, "r") as f:
+            all_indices = f.readlines()
+        inds_to_run = range(len(all_indices))
+        if args.chunk_index is not None:
+            inds_to_run = range(args.chunk_index * args.chunk_size, (args.chunk_index + 1) * args.chunk_size)
+        print("Running lines", inds_to_run)
+        for index in inds_to_run:
+            ads_ind, bulk_ind, surface_ind = all_indices[index].strip().split("_")
+            job = StructureGenerator(
+                args,
+                bulk_index=int(bulk_ind),
+                surface_index=int(surface_ind),
+                adsorbate_index=int(ads_ind),
+            )
+            job.run()
+
+    else:
+        job = StructureGenerator(
+                args,
+                bulk_index=args.bulk_index,
+                surface_index=args.surface_index,
+                adsorbate_index=args.adsorbate_index,
+            )
+        job.run()
