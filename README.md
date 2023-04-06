@@ -1,4 +1,5 @@
 [![CircleCI](https://dl.circleci.com/status-badge/img/gh/Open-Catalyst-Project/Open-Catalyst-Dataset/tree/refactor-v2.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/Open-Catalyst-Project/Open-Catalyst-Dataset/tree/refactor-v2)
+[![codecov](https://codecov.io/gh/Open-Catalyst-Project/Open-Catalyst-Dataset/branch/master/graph/badge.svg?token=IZ7J729L6S)](https://codecov.io/gh/Open-Catalyst-Project/Open-Catalyst-Dataset)
 
 # Open-Catalyst-Dataset
 
