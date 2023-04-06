@@ -3,11 +3,13 @@ import logging
 import warnings
 from itertools import product
 
-import ase
 import numpy as np
 import scipy
+
+import ase
 from ase.data import atomic_numbers, covalent_radii
 from ase.geometry import wrap_positions
+
 from pymatgen.analysis.adsorption import AdsorbateSiteFinder
 from pymatgen.io.ase import AseAtomsAdaptor
 from scipy.optimize import fsolve
@@ -64,6 +66,7 @@ class AdsorbateSlabConfig:
         mode: str = "random",
     ):
         assert mode in ["random", "heuristic"]
+        assert interstitial_gap < 5 and interstitial_gap >= 0
 
         self.slab = slab
         self.adsorbate = adsorbate
@@ -233,7 +236,6 @@ class AdsorbateSlabConfig:
         self,
         sites: list,
         num_augmentations_per_site: int = 1,
-        adsorbate_height_step_size: float = 0.1,
         interstitial_gap: float = 0.1,
     ):
         """
@@ -459,6 +461,56 @@ def custom_tile_atoms(atoms: ase.Atoms):
     return new_atoms
 
 
+def get_interstitial_distances(adsorbate_slab_config: ase.Atoms):
+    """
+    Check to see if there is any atomic overlap between surface atoms
+    and adsorbate atoms.
+
+    Args:
+        adsorbate_slab_configuration (ase.Atoms): an slab atoms object with an
+            adsorbate placed
+
+    Returns:
+        (bool): True if there is atomic overlap, otherwise False
+    """
+    ads_slab_config = adsorbate_slab_config.copy()
+    mask = adsorbate_slab_config.get_tags() == 2
+    adsorbate_atoms = adsorbate_slab_config[mask]
+    adsorbate_com = adsorbate_atoms.get_center_of_mass()
+
+    # wrap atoms so we dont have to worry about pbc
+    cell_center = np.dot(np.array([0.5, 0.5, 0.5]), ads_slab_config.cell)
+    ads_slab_config.translate(cell_center - adsorbate_com)
+    ads_slab_config.wrap()
+
+    adsorbate_atoms = ads_slab_config[mask]
+    adsorbate_coordinates = adsorbate_atoms.get_positions()
+    adsorbate_elements = adsorbate_atoms.get_chemical_symbols()
+
+    mask = ads_slab_config.get_tags() == 1
+    surface_atoms = ads_slab_config[mask]
+    surface_coordinates = surface_atoms.get_positions()
+    surface_elements = surface_atoms.get_chemical_symbols()
+
+    pairs = list(product(range(len(surface_atoms)), range(len(adsorbate_atoms))))
+
+    post_radial_distances = []
+    for combo in pairs:
+        total_distance = ads_slab_config.get_distance(
+            combo[0], combo[1] + len(surface_elements), mic=True
+        )
+        total_distance = np.linalg.norm(
+            adsorbate_atoms.positions[combo[1]] - surface_atoms.positions[combo[0]]
+        )
+        post_radial_distance = (
+            total_distance
+            - covalent_radii[atomic_numbers[surface_elements[combo[0]]]]
+            - covalent_radii[atomic_numbers[adsorbate_elements[combo[1]]]]
+        )
+        post_radial_distances.append(post_radial_distance)
+    return post_radial_distances
+
+
 def there_is_overlap(adsorbate_slab_config: ase.Atoms):
     """
     Check to see if there is any atomic overlap between surface atoms
@@ -471,29 +523,5 @@ def there_is_overlap(adsorbate_slab_config: ase.Atoms):
     Returns:
         (bool): True if there is atomic overlap, otherwise False
     """
-    adsorbate_atoms = adsorbate_slab_config[
-        [idx for idx, tag in enumerate(adsorbate_slab_config.get_tags()) if tag == 2]
-    ]
-    adsorbate_coordinates = adsorbate_atoms.get_positions()
-    adsorbate_elements = adsorbate_atoms.get_chemical_symbols()
-
-    surface_atoms_tiled = adsorbate_slab_config[
-        [idx for idx, tag in enumerate(adsorbate_slab_config.get_tags()) if tag == 1]
-    ]
-    surface_coordinates = surface_atoms_tiled.get_positions()
-    surface_elements = surface_atoms_tiled.get_chemical_symbols()
-
-    pairs = list(product(range(len(surface_atoms_tiled)), range(len(adsorbate_atoms))))
-    unintersected_post_radial_distances = []
-
-    for combo in pairs:
-        total_distance = adsorbate_slab_config.get_distance(
-            combo[0], combo[1] + len(surface_elements)
-        )
-        post_radial_distance = (
-            total_distance
-            - covalent_radii[atomic_numbers[surface_elements[combo[0]]]]
-            - covalent_radii[atomic_numbers[adsorbate_elements[combo[1]]]]
-        )
-        unintersected_post_radial_distances.append(post_radial_distance >= 0)
-    return not all(unintersected_post_radial_distances)
+    post_radial_distances = get_interstitial_distances(adsorbate_slab_config)
+    not all(np.array(post_radial_distances) >= 0)
