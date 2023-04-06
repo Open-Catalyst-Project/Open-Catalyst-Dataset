@@ -283,17 +283,20 @@ class AdsorbateSlabConfig:
         slab_c2.translate(cell_center - site)
         slab_c2.wrap()
 
+        adsorbate_c2 = adsorbate_c.copy()
+        adsorbate_c2.translate(cell_center - site)
+
         adsorbate_positions = adsorbate_c.get_positions()
 
         # See which combos have a possible intersection event
-        combos = self._find_combos_to_check(adsorbate_c, slab_c2, unit_normal)
+        combos = self._find_combos_to_check(adsorbate_c2, slab_c2, unit_normal)
 
         # Solve for the intersections
         if self.mode == "random":
-            placement_center = adsorbate_c.get_center_of_mass()
+            placement_center = adsorbate_c2.get_center_of_mass()
         elif self.mode == "heuristic":
             binding_idx = self.adsorbate.binding_indices[0]
-            placement_center = adsorbate_c.positions[binding_idx]
+            placement_center = adsorbate_c2.positions[binding_idx]
 
         def fun(x):
             return (
@@ -312,21 +315,20 @@ class AdsorbateSlabConfig:
                 n_scale = fsolve(fun, d_min * 3)
                 scaled_norms.append(n_scale[0])
             return max(scaled_norms)
-
         else:  # Comment(@brookwander): this is a kinda scary edge case
             return (
                 0  # if there are no possible surface itersections, place it at the site
             )
 
     def _find_combos_to_check(
-        self, adsorbate_c: ase.Atoms, slab_c2: ase.Atoms, unit_normal: np.ndarray
+        self, adsorbate_c2: ase.Atoms, slab_c2: ase.Atoms, unit_normal: np.ndarray
     ):
         """
         Find the pairs of surface and adsorbate atoms that would have an intersection event
         while traversing the normal vector. For each pair, return pertanent information for
         finding the point of intersection.
         Args:
-            adsorbate_c (ase.Atoms): A copy of the adsorbate with coordinates at the site
+            adsorbate_c2 (ase.Atoms): A copy of the adsorbate with coordinates at the centered site
             slab_c2 (ase.Atoms): A copy of the slab with atoms wrapped s.t. things are centered
                 about the site
             unit_normal (np.ndarray): the unit vector normal to the surface
@@ -336,11 +338,13 @@ class AdsorbateSlabConfig:
                 following information:
                     [(adsorbate_idx, slab_idx), r_adsorbate_atom + r_slab_atom, slab_atom_position]
         """
-        adsorbate_elements = adsorbate_c.get_chemical_symbols()
+        adsorbate_elements = adsorbate_c2.get_chemical_symbols()
         slab_elements = slab_c2.get_chemical_symbols()
-        projected_points = self._get_projected_points(adsorbate_c, slab_c2, unit_normal)
+        projected_points = self._get_projected_points(
+            adsorbate_c2, slab_c2, unit_normal
+        )
 
-        pairs = list(product(list(range(len(adsorbate_c))), list(range(len(slab_c2)))))
+        pairs = list(product(list(range(len(adsorbate_c2))), list(range(len(slab_c2)))))
 
         combos_to_check = []
         for combo in pairs:
@@ -358,12 +362,12 @@ class AdsorbateSlabConfig:
         return combos_to_check
 
     def _get_projected_points(
-        self, adsorbate_c: ase.Atoms, slab_c2: ase.Atoms, unit_normal: np.ndarray
+        self, adsorbate_c2: ase.Atoms, slab_c2: ase.Atoms, unit_normal: np.ndarray
     ):
         """
         Find the x and y coordinates of each atom projected onto the surface plane.
         Args:
-            adsorbate_c (ase.Atoms): A copy of the adsorbate with coordinates at the site
+            adsorbate_c2 (ase.Atoms): A copy of the adsorbate with coordinates at the centered site
             slab_c2 (ase.Atoms): A copy of the slab with atoms wrapped s.t. things are centered
                 about the site
             unit_normal (np.ndarray): the unit vector normal to the surface
@@ -373,7 +377,7 @@ class AdsorbateSlabConfig:
         """
         projected_points = {"ads": [], "slab": []}
         point_on_surface = slab_c2.cell[0]
-        for atom_position in adsorbate_c.positions:
+        for atom_position in adsorbate_c2.positions:
             v_ = atom_position - point_on_surface
             projected_point = point_on_surface + (
                 v_
