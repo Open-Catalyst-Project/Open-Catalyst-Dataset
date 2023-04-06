@@ -308,18 +308,18 @@ class AdsorbateSlabConfig:
                 - (d_min + interstitial_gap) ** 2
             )
 
-        # if len(combos) > 0:
-        scaled_norms = []
-        for combo in combos:
-            closest_idxs, d_min, surf_pos = combo
-            u_ = adsorbate_positions[closest_idxs[0]] - placement_center
-            n_scale = fsolve(fun, d_min * 3)
-            scaled_norms.append(n_scale[0])
-        return max(scaled_norms)
-        # else:  # Comment(@brookwander): this is a kinda scary edge case
-        #     return (
-        #         0  # if there are no possible surface itersections, place it at the site
-        #     )
+        if len(combos) > 0:
+            scaled_norms = []
+            for combo in combos:
+                closest_idxs, d_min, surf_pos = combo
+                u_ = adsorbate_positions[closest_idxs[0]] - placement_center
+                n_scale = fsolve(fun, d_min * 3)
+                scaled_norms.append(n_scale[0])
+            return max(scaled_norms)
+        else:  # Comment(@brookwander): this is a kinda scary edge case
+            return (
+                0  # if there are no possible surface itersections, place it at the site
+            )
 
     def _find_combos_to_check(
         self, adsorbate_c2: ase.Atoms, slab_c2: ase.Atoms, unit_normal: np.ndarray
