@@ -297,9 +297,9 @@ class AdsorbateSlabConfig:
 
         def fun(x):
             return (
-                (surf_pos[0] - (site[0] + x * unit_normal[0] + u_[0])) ** 2
-                + (surf_pos[1] - (site[1] + x * unit_normal[1] + u_[1])) ** 2
-                + (surf_pos[2] - (site[2] + x * unit_normal[2] + u_[2])) ** 2
+                (surf_pos[0] - (cell_center[0] + x * unit_normal[0] + u_[0])) ** 2
+                + (surf_pos[1] - (cell_center[1] + x * unit_normal[1] + u_[1])) ** 2
+                + (surf_pos[2] - (cell_center[2] + x * unit_normal[2] + u_[2])) ** 2
                 - (d_min + interstitial_gap) ** 2
             )
 
@@ -380,7 +380,7 @@ class AdsorbateSlabConfig:
                 - (np.dot(v_, unit_normal) / np.linalg.norm(unit_normal) ** 2)
                 * unit_normal
             )
-            projected_points["ads"].append(projected_point[0:2])
+            projected_points["ads"].append(projected_point)
 
         for atom_position in slab_c2.positions:
             v_ = atom_position - point_on_surface
@@ -389,7 +389,7 @@ class AdsorbateSlabConfig:
                 - (np.dot(v_, unit_normal) / np.linalg.norm(unit_normal) ** 2)
                 * unit_normal
             )
-            projected_points["slab"].append(projected_point[0:2])
+            projected_points["slab"].append(projected_point)
         return projected_points
 
     def get_metadata_dict(self, ind):
