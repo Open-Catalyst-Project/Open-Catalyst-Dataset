@@ -15,7 +15,7 @@ from scipy.optimize import fsolve
 from ocdata.core import Adsorbate, Slab
 from ocdata.core.adsorbate import randomly_rotate_adsorbate
 
-# warnings.filterwarnings("ignore", "The iteration is not making good progress")
+warnings.filterwarnings("ignore", "The iteration is not making good progress")
 
 
 class AdsorbateSlabConfig:
@@ -293,10 +293,10 @@ class AdsorbateSlabConfig:
 
         # Solve for the intersections
         if self.mode == "random":
-            placement_center = adsorbate_c2.get_center_of_mass()
+            placement_center = adsorbate_c.get_center_of_mass()
         elif self.mode == "heuristic":
             binding_idx = self.adsorbate.binding_indices[0]
-            placement_center = adsorbate_c2.positions[binding_idx]
+            placement_center = adsorbate_c.positions[binding_idx]
 
         def fun(x):
             return (
@@ -306,19 +306,18 @@ class AdsorbateSlabConfig:
                 - (d_min + interstitial_gap) ** 2
             )
 
-        if len(combos) > 0:
-            scaled_norms = []
-            for combo in combos:
-                closest_idxs, d_min, surf_pos = combo
-
-                u_ = adsorbate_positions[closest_idxs[0]] - placement_center
-                n_scale = fsolve(fun, d_min * 3)
-                scaled_norms.append(n_scale[0])
-            return max(scaled_norms)
-        else:  # Comment(@brookwander): this is a kinda scary edge case
-            return (
-                0  # if there are no possible surface itersections, place it at the site
-            )
+        # if len(combos) > 0:
+        scaled_norms = []
+        for combo in combos:
+            closest_idxs, d_min, surf_pos = combo
+            u_ = adsorbate_positions[closest_idxs[0]] - placement_center
+            n_scale = fsolve(fun, d_min * 3)
+            scaled_norms.append(n_scale[0])
+        return max(scaled_norms)
+        # else:  # Comment(@brookwander): this is a kinda scary edge case
+        #     return (
+        #         0  # if there are no possible surface itersections, place it at the site
+        #     )
 
     def _find_combos_to_check(
         self, adsorbate_c2: ase.Atoms, slab_c2: ase.Atoms, unit_normal: np.ndarray
@@ -460,23 +459,27 @@ def custom_tile_atoms(atoms: ase.Atoms):
     return new_atoms
 
 
-def there_is_overlap(adsorbate_atoms: ase.Atoms, surface_atoms_tiled: ase.Atoms):
+def there_is_overlap(adsorbate_slab_config: ase.Atoms):
     """
     Check to see if there is any atomic overlap between surface atoms
     and adsorbate atoms.
 
     Args:
-        adsorbate_atoms (ase.Atoms): the adsorbate atoms copy which
-            is being manipulated during placement
-        surface_atoms_tiled: a tiled copy of the surface atoms from
-            `custom_tile_atoms`
+        adsorbate_slab_configuration (ase.Atoms): an slab atoms object with an
+            adsorbate placed
 
     Returns:
         (bool): True if there is atomic overlap, otherwise False
     """
+    adsorbate_atoms = adsorbate_slab_config[
+        [idx for idx, tag in enumerate(adsorbate_slab_config.get_tags()) if tag == 2]
+    ]
     adsorbate_coordinates = adsorbate_atoms.get_positions()
     adsorbate_elements = adsorbate_atoms.get_chemical_symbols()
 
+    surface_atoms_tiled = adsorbate_slab_config[
+        [idx for idx, tag in enumerate(adsorbate_slab_config.get_tags()) if tag == 1]
+    ]
     surface_coordinates = surface_atoms_tiled.get_positions()
     surface_elements = surface_atoms_tiled.get_chemical_symbols()
 
@@ -484,8 +487,8 @@ def there_is_overlap(adsorbate_atoms: ase.Atoms, surface_atoms_tiled: ase.Atoms)
     unintersected_post_radial_distances = []
 
     for combo in pairs:
-        total_distance = np.linalg.norm(
-            adsorbate_coordinates[combo[1]] - surface_coordinates[combo[0]]
+        total_distance = adsorbate_slab_config.get_distance(
+            combo[0], combo[1] + len(surface_elements)
         )
         post_radial_distance = (
             total_distance
