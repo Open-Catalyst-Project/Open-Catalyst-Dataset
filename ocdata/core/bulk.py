@@ -63,14 +63,24 @@ class Bulk:
         """
         Returns a list of possible slabs for this bulk instance.
         """
+        precomp_slabs_pkl = None
         if precomputed_slabs_dir is not None and self.bulk_id_from_db is not None:
+            precomp_slabs_pkl = os.path.join(
+                precomputed_slabs_dir, f"{self.bulk_id_from_db}.pkl"
+            )
+
+        if precomp_slabs_pkl is not None and os.path.exists(precomp_slabs_pkl):
             slabs = Slab.from_precomputed_slabs_pkl(
                 self,
-                os.path.join(precomputed_slabs_dir, f"{self.bulk_id_from_db}.pkl"),
+                precomp_slabs_pkl,
                 max_miller=max_miller,
             )
         else:
-            slabs = Slab.from_bulk_get_all_slabs(self, max_miller=max_miller)
+            # If precomputed_slabs_dir was provided but the specific pkl for the bulk
+            # doesn't exist, save it out after we generate the slabs
+            slabs = Slab.from_bulk_get_all_slabs(
+                self, max_miller=max_miller, save_path=precomp_slabs_pkl
+            )
 
         return slabs
 

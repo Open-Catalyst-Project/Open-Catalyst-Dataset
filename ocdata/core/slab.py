@@ -71,21 +71,17 @@ class Slab:
 
     @classmethod
     def from_bulk_get_random_slab(
-        cls, bulk=None, max_miller=2, tile_and_tag=True, min_ab=8.0
+        cls, bulk=None, max_miller=2, tile_and_tag=True, min_ab=8.0, save_path=None
     ):
-        assert bulk is not None
-
-        slabs = compute_slabs(
-            bulk.atoms,
-            max_miller=max_miller,
+        all_slabs = Slab.from_bulk_get_all_slabs(
+            bulk, max_miller, tile_and_tag, min_ab, save_path
         )
-        slab_idx = np.random.randint(len(slabs))
-        unit_slab_struct, millers, shift, top = slabs[slab_idx]
-        return cls(bulk, unit_slab_struct, millers, shift, top, tile_and_tag, min_ab)
+        slab_idx = np.random.randint(len(all_slabs))
+        return all_slabs[slab_idx]
 
     @classmethod
     def from_bulk_get_all_slabs(
-        cls, bulk=None, max_miller=2, tile_and_tag=True, min_ab=8.0
+        cls, bulk=None, max_miller=2, tile_and_tag=True, min_ab=8.0, save_path=None
     ):
         assert bulk is not None
 
@@ -93,6 +89,13 @@ class Slab:
             bulk.atoms,
             max_miller=max_miller,
         )
+        # if path is provided, save out the pkl
+        if save_path is not None:
+            assert not os.path.exists(save_path)
+            os.makedirs(os.path.dirname(save_path), exist_ok=True)
+            with open(save_path, "wb") as f:
+                pickle.dump(slabs, f)
+
         return [cls(bulk, s[0], s[1], s[2], s[3], tile_and_tag, min_ab) for s in slabs]
 
     @classmethod

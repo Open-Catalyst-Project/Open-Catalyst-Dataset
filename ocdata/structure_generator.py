@@ -4,6 +4,7 @@ import multiprocessing as mp
 import os
 import pickle
 import time
+import traceback
 
 import numpy as np
 
@@ -34,6 +35,9 @@ class StructureGenerator:
                     ...
             bulk1/
                 ...
+
+    Precomputed surfaces will be calculated and saved out if they don't
+    already exist in the provided directory.
 
     Arguments
     ----------
@@ -201,7 +205,9 @@ def parse_args():
         required=True,
         help="Underlying db for adsorbates (.pkl)",
     )
-    # for optimized (automatically try to use optimized if this is provided)
+
+    # Slabs for each bulk - if provided, this will save computation,
+    # otherwise the slabs will be generated and saved out
     parser.add_argument(
         "--precomputed_slabs_dir",
         type=str,
@@ -314,14 +320,17 @@ def parse_args():
 
 
 def generate_async(args, ads_ind, bulk_ind, surface_ind):
-    # args, ads_ind, bulk_ind, surface_ind = args_and_indices
-    job = StructureGenerator(
-        args,
-        bulk_index=int(bulk_ind),
-        surface_index=int(surface_ind),
-        adsorbate_index=int(ads_ind),
-    )
-    job.run()
+    try:
+        job = StructureGenerator(
+            args,
+            bulk_index=int(bulk_ind),
+            surface_index=int(surface_ind),
+            adsorbate_index=int(ads_ind),
+        )
+        job.run()
+    except Exception:
+        # Explicitly print errors or else the pool will fail silently
+        traceback.print_exc()
 
 
 if __name__ == "__main__":
@@ -341,7 +350,7 @@ if __name__ == "__main__":
                 args.chunk_index * args.chunk_size,
                 min((args.chunk_index + 1) * args.chunk_size, len(all_indices)),
             )
-        print("Running lines", inds_to_run)
+        print("Running lines:", inds_to_run)
 
         pool_inputs = []
         pool = mp.Pool(args.workers)
