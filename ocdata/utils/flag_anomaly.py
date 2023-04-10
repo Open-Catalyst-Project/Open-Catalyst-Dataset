@@ -118,3 +118,23 @@ class DetectTrajAnomaly:
         ase_neighbor_list.update(atoms)
         matrix = neighborlist.get_connectivity_matrix(ase_neighbor_list.nl).toarray()
         return matrix
+    
+    def is_adsorbate_intercalated(self):
+        """
+        Ensure the adsorbate isn't interacting with an atom that is not allowed to relax.
+
+        Returns:
+            (bool): True if any adsorbate atom neighbors a frozen atom, otherwise False
+        """
+        adsorbate_atoms_idx = [
+            idx for idx, tag in enumerate(self.atoms_tag) if tag == 2
+        ]
+        frozen_atoms_idx = [idx for idx, tag in enumerate(self.atoms_tag) if tag == 0]
+        final_connectivity = self._get_connectivity(
+            self.final_atoms,
+        )
+
+        for idx in adsorbate_atoms_idx:
+            if sum(final_connectivity[idx][frozen_atoms_idx]) >= 1:
+                return True
+        return False
