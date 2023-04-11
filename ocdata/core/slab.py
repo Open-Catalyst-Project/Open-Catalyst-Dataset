@@ -29,74 +29,92 @@ class Slab:
     ---------
     bulk: Bulk
         Corresponding Bulk object.
-    unit_slab_struct: Structure
-        Unit cell slab structure.
+    slab_atoms: ase.Atoms
+        Slab atoms, tiled and tagged
     millers: tuple
         Miller indices of slab.
     shift: float
         Shift of slab.
     top: bool
         Whether slab is top or bottom.
-    tile_and_tag: bool
-        Whether to tile slab along xyz and tag surface / fixed atoms.
+    min_ab: float
+        To confirm that the tiled structure spans this distance
     """
 
     def __init__(
         self,
         bulk=None,
-        unit_slab_struct: Structure = None,
+        slab_atoms: ase.Atoms = None,
         millers: tuple = None,
         shift: float = None,
         top: bool = None,
-        tile_and_tag: bool = True,
-        min_ab: float = 8.0,
+        min_ab: float = 0.8,
     ):
         assert bulk is not None
         self.bulk = bulk
 
-        self.atoms = AseAtomsAdaptor.get_atoms(unit_slab_struct)
+        self.atoms = slab_atoms
         self.millers = millers
         self.shift = shift
         self.top = top
-
-        if tile_and_tag:
-            self.atoms = tile_atoms(self.atoms, min_ab=min_ab)
-            self.atoms = tag_surface_atoms(self.atoms, self.bulk.atoms)
-            self.atoms = set_fixed_atom_constraints(self.atoms)
 
         assert (
             Composition(self.atoms.get_chemical_formula()).reduced_formula
             == Composition(bulk.atoms.get_chemical_formula()).reduced_formula
         ), "Mismatched bulk and surface"
+        assert (
+            np.linalg.norm(self.atoms.cell[0]) >= min_ab
+            and np.linalg.norm(self.atoms.cell[1]) >= min_ab
+        ), "Slab not tiled"
+        assert self.has_surface_tagged(), "Slab not tagged"
+        assert len(self.atoms.constraints) > 0, "Sub-surface atoms not constrained"
 
     @classmethod
     def from_bulk_get_random_slab(
-        cls, bulk=None, max_miller=2, tile_and_tag=True, min_ab=8.0, save_path=None
+        cls, bulk=None, max_miller=2, min_ab=8.0, save_path=None
     ):
-        all_slabs = Slab.from_bulk_get_all_slabs(
-            bulk, max_miller, tile_and_tag, min_ab, save_path
-        )
-        slab_idx = np.random.randint(len(all_slabs))
-        return all_slabs[slab_idx]
+        if save_path is not None:
+            all_slabs = Slab.from_bulk_get_all_slabs(
+                bulk, max_miller, min_ab, save_path
+            )
+            slab_idx = np.random.randint(len(all_slabs))
+            return all_slabs[slab_idx]
+        else:
+            # If we're not saving all slabs, just tile and tag one
+            assert bulk is not None
+            untiled_slabs = compute_slabs(
+                bulk.atoms,
+                max_miller=max_miller,
+            )
+            slab_idx = np.random.randint(len(untiled_slabs))
+            unit_slab_struct, millers, shift, top = untiled_slabs[slab_idx]
+            slab_atoms = tile_and_tag_atoms(unit_slab_struct, bulk.atoms, min_ab=min_ab)
+
+            return cls(bulk, slab_atoms, millers, shift, top)
 
     @classmethod
     def from_bulk_get_all_slabs(
-        cls, bulk=None, max_miller=2, tile_and_tag=True, min_ab=8.0, save_path=None
+        cls, bulk=None, max_miller=2, min_ab=8.0, save_path=None
     ):
         assert bulk is not None
 
-        slabs = compute_slabs(
+        untiled_slabs = compute_slabs(
             bulk.atoms,
             max_miller=max_miller,
         )
+        slabs = []
+        for s in untiled_slabs:
+            slabs.append(
+                (tile_and_tag_atoms(s[0], bulk.atoms, min_ab=min_ab), s[1], s[2], s[3])
+            )
+
         # if path is provided, save out the pkl
         if save_path is not None:
-            assert not os.path.exists(save_path)
             os.makedirs(os.path.dirname(save_path), exist_ok=True)
             with open(save_path, "wb") as f:
                 pickle.dump(slabs, f)
 
-        return [cls(bulk, s[0], s[1], s[2], s[3], tile_and_tag, min_ab) for s in slabs]
+        return [cls(bulk, s[0], s[1], s[2], s[3]) for s in slabs]
 
     @classmethod
     def from_precomputed_slabs_pkl(
@@ -119,7 +137,7 @@ class Slab:
             return slabs
         else:
             assert np.all(np.array([s[1] for s in slabs]) <= max_miller)
-            return [cls(bulk, s[0], s[1], s[2], s[3], min_ab=min_ab) for s in slabs]
+            return [cls(bulk, s[0], s[1], s[2], s[3]) for s in slabs]
 
     @classmethod
     def from_atoms(cls, atoms: ase.Atoms = None, bulk=None, **kwargs):
@@ -160,6 +178,33 @@ class Slab:
             and self.shift == other.shift
             and self.top == other.top
         )
+
+
+def tile_and_tag_atoms(
+    unit_slab_struct: Structure, bulk_atoms: ase.Atoms, min_ab: float = 8
+):
+    """
+    This function combines the next three functions that tile, tag,
+    and constrain the atoms.
+
+    Arguments
+    ---------
+    unit_slab_struct: Structure
+        The untiled slab structure
+    bulk_atoms: ase.Atoms
+        Atoms of the corresponding bulk structure, used for tagging
+    min_ab: float
+        The minimum distance in x and y spanned by the tiled structure.
+
+    Returns
+    -------
+    atoms_tiled: ase.Atoms
+        A copy of the slab atoms that is tiled, tagged, and constrained
+    """
+    slab_atoms = AseAtomsAdaptor.get_atoms(unit_slab_struct)
+    return set_fixed_atom_constraints(
+        tag_surface_atoms(tile_atoms(slab_atoms, min_ab=min_ab), bulk_atoms)
+    )
 
 
 def set_fixed_atom_constraints(slab_atoms):
