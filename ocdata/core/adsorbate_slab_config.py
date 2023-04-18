@@ -1,6 +1,7 @@
 import copy
 import logging
 import warnings
+import random
 from itertools import product
 
 import ase
@@ -192,22 +193,25 @@ class AdsorbateSlabConfig:
         adsorbate_c = self.adsorbate.atoms.copy()
         slab_c = self.slab.atoms.copy()
 
+        if self.mode in ["heuristic", "random_site_heuristic_placement"]:
+            binding_idx = random.choice(self.adsorbate.binding_indices)
+
         # Rotate adsorbate along xyz, only if adsorbate has more than 1 atom.
         if len(self.adsorbate.atoms) > 1:
             adsorbate_c = randomly_rotate_adsorbate(
                 adsorbate_c,
                 mode=self.mode,
-                binding_idx=self.adsorbate.binding_indices,
+                binding_idx=binding_idx,
             )
 
         # Translate adsorbate to binding site.
         if self.mode == "random":
             placement_center = adsorbate_c.get_center_of_mass()
         elif self.mode in ["heuristic", "random_site_heuristic_placement"]:
-            binding_idx = self.adsorbate.binding_indices[0]
             placement_center = adsorbate_c.positions[binding_idx]
         else:
             raise NotImplementedError
+
         translation_vector = site - placement_center
         adsorbate_c.translate(translation_vector)
 
@@ -220,6 +224,7 @@ class AdsorbateSlabConfig:
             slab_c,
             site,
             unit_normal,
+            placement_center,
             interstitial_gap,
         )
         adsorbate_c.translate(scaled_normal * unit_normal)
@@ -256,6 +261,7 @@ class AdsorbateSlabConfig:
         slab_c: ase.Atoms,
         site: np.ndarray,
         unit_normal: np.ndarray,
+        placement_center: np.ndarray,
         interstitial_gap: float = 0.1,
     ):
         """
@@ -277,6 +283,7 @@ class AdsorbateSlabConfig:
             site (np.ndarray): the coordinate of the site
             adsorbate_atoms (ase.Atoms): the translated adsorbate
             unit_normal (np.ndarray): the unit vector normal to the surface
+            placement_center: the position about which placement is centered
             interstitial_gap (float): the desired distance between the covalent radii of the
                 closest surface and adsorbate atom
         Returns:
@@ -288,21 +295,15 @@ class AdsorbateSlabConfig:
         slab_c2.translate(cell_center - site)
         slab_c2.wrap()
 
+        adsorbate_positions = adsorbate_c.get_positions()
+
         adsorbate_c2 = adsorbate_c.copy()
         adsorbate_c2.translate(cell_center - site)
-
-        adsorbate_positions = adsorbate_c.get_positions()
 
         # See which combos have a possible intersection event
         combos = self._find_combos_to_check(adsorbate_c2, slab_c2, unit_normal)
 
         # Solve for the intersections
-        if self.mode == "random":
-            placement_center = adsorbate_c.get_center_of_mass()
-        elif self.mode in ["heuristic", "random_site_heuristic_placement"]:
-            binding_idx = self.adsorbate.binding_indices[0]
-            placement_center = adsorbate_c.positions[binding_idx]
-
         def fun(x):
             return (
                 (surf_pos[0] - (cell_center[0] + x * unit_normal[0] + u_[0])) ** 2
