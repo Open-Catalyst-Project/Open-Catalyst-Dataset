@@ -7,6 +7,7 @@ import time
 import traceback
 
 import numpy as np
+from tqdm import tqdm
 
 from ocdata.core import Adsorbate, AdsorbateSlabConfig, Bulk, Slab
 from ocdata.utils.vasp import write_vasp_input_files
@@ -237,10 +238,16 @@ def parse_args():
         help="File containing adsorbate_bulk_surface indices",
     )
     parser.add_argument(
-        "--chunk_index", type=int, default=None, help="Row(s) in file to run"
+        "--chunks",
+        type=int,
+        default=1,
+        help="For multi-node processing, number of chunks to split inputs across.",
     )
     parser.add_argument(
-        "--chunk_size", type=int, default=1, help="Chunk size for parallelization"
+        "--chunk_index",
+        type=int,
+        default=0,
+        help="For multi-node processing, index of chunk to process.",
     )
 
     # output
@@ -319,7 +326,8 @@ def parse_args():
     return args
 
 
-def generate_async(args, ads_ind, bulk_ind, surface_ind):
+def run_placements(inputs):
+    args, ads_ind, bulk_ind, surface_ind = inputs
     try:
         job = StructureGenerator(
             args,
@@ -343,26 +351,23 @@ if __name__ == "__main__":
 
     if args.indices_file:
         with open(args.indices_file, "r") as f:
-            all_indices = f.readlines()
-        inds_to_run = range(len(all_indices))
-        if args.chunk_index is not None:
-            inds_to_run = range(
-                args.chunk_index * args.chunk_size,
-                min((args.chunk_index + 1) * args.chunk_size, len(all_indices)),
-            )
-        print("Running lines:", inds_to_run)
+            all_indices = f.read().splitlines()
+        chunks = np.array_split(all_indices, args.chunks)
+        inds_to_run = chunks[args.chunk_index]
+        print(
+            f"Running lines from {args.indices_file}, starting from {inds_to_run[0]} ending at {inds_to_run[1]}"
+        )
 
         pool_inputs = []
+        for line in inds_to_run:
+            ads_ind, bulk_ind, surface_ind = line.strip().split("_")
+            pool_inputs.append((args, ads_ind, bulk_ind, surface_ind))
+
         pool = mp.Pool(args.workers)
-        for index in inds_to_run:
-            ads_ind, bulk_ind, surface_ind = all_indices[index].strip().split("_")
-            pool.apply_async(
-                generate_async, args=(args, ads_ind, bulk_ind, surface_ind)
-            )
-
+        outputs = list(
+            tqdm(pool.imap(run_placements, pool_inputs), total=len(pool_inputs))
+        )
         pool.close()
-        pool.join()
-
     else:
         job = StructureGenerator(
             args,
