@@ -72,7 +72,7 @@ def randomly_rotate_adsorbate(
         atoms.rotate(angles[0], v="x", center="COM")
         atoms.rotate(angles[1], v="y", center="COM")
         atoms.rotate(angles[2], v="z", center="COM")
-    elif mode == "heuristic":
+    elif mode in ["heuristic", "random_site_heuristic_placement"]:
         assert binding_idx is not None
         # Rotate about binding atom. Free to rotate uniformly about z, but only
         # slight wobbles around x and y, to avoid crashing into the surface.

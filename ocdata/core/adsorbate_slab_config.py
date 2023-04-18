@@ -36,7 +36,7 @@ class AdsorbateSlabConfig:
     interstitial_gap: float
         Minimum distance in Angstroms between adsorbate and slab atoms.
     mode: str
-        "random" or "heuristic".
+        "random", "heuristic", or "random_site_heuristic_placement".
         This affects surface site sampling and adsorbate placement on each site.
 
         In "random", we do a Delaunay triangulation of the surface atoms, then
@@ -50,7 +50,13 @@ class AdsorbateSlabConfig:
         slight rotation along x and y, and place it such that the binding atom
         is at the site.
 
-        In both cases, the adsorbate is placed at the closest position of no
+        In "random_site_heuristic_placement", we do a Delaunay triangulation of
+        the surface atoms, then sample sites uniformly at random within each
+        triangle. When placing the adsorbate, we randomly rotate it along z with
+        only slight rotation along x and y, and place it such that the binding
+        atom is at the site.
+
+        In all cases, the adsorbate is placed at the closest position of no
         overlap with the slab plus `interstitial_gap` along the surface normal.
     """
 
@@ -63,7 +69,7 @@ class AdsorbateSlabConfig:
         interstitial_gap: float = 0.1,
         mode: str = "random",
     ):
-        assert mode in ["random", "heuristic"]
+        assert mode in ["random", "heuristic", "random_site_heuristic_placement"]
         assert interstitial_gap < 5 and interstitial_gap >= 0
 
         self.slab = slab
@@ -79,7 +85,6 @@ class AdsorbateSlabConfig:
             num_augmentations_per_site,
             interstitial_gap,
         )
-        # self.atoms_list = self.filter_unreasonable_structures(self.atoms_list)
 
     def get_binding_sites(self, num_sites: int):
         """
@@ -88,7 +93,7 @@ class AdsorbateSlabConfig:
         assert self.slab.has_surface_tagged()
 
         all_sites = []
-        if self.mode == "random":
+        if self.mode in ["random", "random_site_heuristic_placement"]:
             # The Delaunay triangulation of surface atoms doesn't take PBC into
             # account, so we end up undersampling triangles near the edges of
             # the central unit cell. To avoid that, we explicitly tile the slab
@@ -198,7 +203,7 @@ class AdsorbateSlabConfig:
         # Translate adsorbate to binding site.
         if self.mode == "random":
             placement_center = adsorbate_c.get_center_of_mass()
-        elif self.mode == "heuristic":
+        elif self.mode in ["heuristic", "random_site_heuristic_placement"]:
             binding_idx = self.adsorbate.binding_indices[0]
             placement_center = adsorbate_c.positions[binding_idx]
         else:
@@ -294,7 +299,7 @@ class AdsorbateSlabConfig:
         # Solve for the intersections
         if self.mode == "random":
             placement_center = adsorbate_c.get_center_of_mass()
-        elif self.mode == "heuristic":
+        elif self.mode in ["heuristic", "random_site_heuristic_placement"]:
             binding_idx = self.adsorbate.binding_indices[0]
             placement_center = adsorbate_c.positions[binding_idx]
 
@@ -482,12 +487,10 @@ def get_interstitial_distances(adsorbate_slab_config: ase.Atoms):
     ads_slab_config.wrap()
 
     adsorbate_atoms = ads_slab_config[mask]
-    adsorbate_coordinates = adsorbate_atoms.get_positions()
     adsorbate_elements = adsorbate_atoms.get_chemical_symbols()
 
     mask = ads_slab_config.get_tags() == 1
     surface_atoms = ads_slab_config[mask]
-    surface_coordinates = surface_atoms.get_positions()
     surface_elements = surface_atoms.get_chemical_symbols()
 
     pairs = list(product(range(len(surface_atoms)), range(len(adsorbate_atoms))))
