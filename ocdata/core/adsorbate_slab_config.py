@@ -1,7 +1,7 @@
 import copy
 import logging
-import warnings
 import random
+import warnings
 from itertools import product
 
 import ase
@@ -193,6 +193,7 @@ class AdsorbateSlabConfig:
         adsorbate_c = self.adsorbate.atoms.copy()
         slab_c = self.slab.atoms.copy()
 
+        binding_idx = None
         if self.mode in ["heuristic", "random_site_heuristic_placement"]:
             binding_idx = random.choice(self.adsorbate.binding_indices)
 
@@ -224,7 +225,6 @@ class AdsorbateSlabConfig:
             slab_c,
             site,
             unit_normal,
-            placement_center,
             interstitial_gap,
         )
         adsorbate_c.translate(scaled_normal * unit_normal)
@@ -261,7 +261,6 @@ class AdsorbateSlabConfig:
         slab_c: ase.Atoms,
         site: np.ndarray,
         unit_normal: np.ndarray,
-        placement_center: np.ndarray,
         interstitial_gap: float = 0.1,
     ):
         """
@@ -277,13 +276,15 @@ class AdsorbateSlabConfig:
                 interstitial_gap. This exploits the superposition of vectors and the
                 distance formula, so it requires root finding.
 
+        Assumes that the adsorbate's binding atom or center-of-mass (depending
+        on mode) is already placed at the site.
+
         Args:
             adsorbate_c (ase.Atoms): A copy of the adsorbate with coordinates at the site
             slab_c (ase.Atoms): A copy of the slab
             site (np.ndarray): the coordinate of the site
             adsorbate_atoms (ase.Atoms): the translated adsorbate
             unit_normal (np.ndarray): the unit vector normal to the surface
-            placement_center: the position about which placement is centered
             interstitial_gap (float): the desired distance between the covalent radii of the
                 closest surface and adsorbate atom
         Returns:
@@ -316,7 +317,7 @@ class AdsorbateSlabConfig:
             scaled_norms = []
             for combo in combos:
                 closest_idxs, d_min, surf_pos = combo
-                u_ = adsorbate_positions[closest_idxs[0]] - placement_center
+                u_ = adsorbate_positions[closest_idxs[0]] - site
                 n_scale = fsolve(fun, d_min * 3)
                 scaled_norms.append(n_scale[0])
             return max(scaled_norms)
