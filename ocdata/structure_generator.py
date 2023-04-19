@@ -397,6 +397,7 @@ if __name__ == "__main__":
         chunks = np.array_split(all_indices, args.chunks)
         inds_to_run = chunks[args.chunk_index]
 
+        pool = mp.Pool(args.workers)
         outputs = list(
             tqdm(pool.imap(precompute_slabs, inds_to_run), total=len(inds_to_run))
         )
