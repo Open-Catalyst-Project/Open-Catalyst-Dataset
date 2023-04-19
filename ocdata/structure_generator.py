@@ -203,7 +203,6 @@ def parse_args():
     parser.add_argument(
         "--adsorbate_db",
         type=str,
-        required=True,
         help="Underlying db for adsorbates (.pkl)",
     )
 
@@ -238,6 +237,12 @@ def parse_args():
         help="File containing adsorbate_bulk_surface indices",
     )
     parser.add_argument(
+        "--bulk_indices_file",
+        type=str,
+        default=None,
+        help="If indices_file not provided, file containing bulk indices to precompute slabs",
+    )
+    parser.add_argument(
         "--chunks",
         type=int,
         default=1,
@@ -251,9 +256,7 @@ def parse_args():
     )
 
     # output
-    parser.add_argument(
-        "--output_dir", type=str, required=True, help="Root directory for outputs"
-    )
+    parser.add_argument("--output_dir", type=str, help="Root directory for outputs")
 
     # other options
     parser.add_argument(
@@ -311,11 +314,16 @@ def parse_args():
     args = parser.parse_args()
 
     # check that all needed args are supplied
-    if not (args.random_placements or args.heuristic_placements):
-        parser.error("Must choose either or both of random or heuristic placements")
-    if args.random_placements and (args.random_sites is None or args.random_sites <= 0):
-        parser.error("Must specify number of sites for random placements")
-    if not args.indices_file:
+    if args.indices_file:
+        if not (args.random_placements or args.heuristic_placements):
+            parser.error("Must choose either or both of random or heuristic placements")
+        if args.random_placements and (
+            args.random_sites is None or args.random_sites <= 0
+        ):
+            parser.error("Must specify number of sites for random placements")
+    elif args.bulk_indices_file:
+        assert args.precomputed_slabs_dir is not None
+    else:
         if (
             args.adsorbate_index is None
             or args.bulk_index is None
@@ -324,6 +332,18 @@ def parse_args():
             parser.error("Must provide a file or specify all material indices")
 
     return args
+
+
+def precompute_slabs(bulk_ind):
+    # create adsorbate, bulk, and surface objects
+    try:
+        bulk = Bulk(bulk_id_from_db=int(bulk_ind), bulk_db_path=args.bulk_db)
+        bulk.get_slabs(
+            max_miller=args.max_miller,
+            precomputed_slabs_dir=args.precomputed_slabs_dir,
+        )
+    except Exception:
+        traceback.print_exc()
 
 
 def run_placements(inputs):
@@ -343,9 +363,11 @@ def run_placements(inputs):
 
 if __name__ == "__main__":
     """
-    This script allows you to either pass in the bulk/surface/adsorbate indices,
-    or read from a file containing multiple sets of indices, which you can also
-    break up into chunks for parallelizaiton.
+    This script creates adsorbate+surface placements and saves them out. An
+    indices_file is required, which contains the adsorbate, bulk, and surface
+    index desired for placement. Alternatively, if a bulk_indices_file is
+    provided with bulk indices, slabs will be precomputed and saved to the
+    provided directory.
     """
     args = parse_args()
 
@@ -366,6 +388,17 @@ if __name__ == "__main__":
         pool = mp.Pool(args.workers)
         outputs = list(
             tqdm(pool.imap(run_placements, pool_inputs), total=len(pool_inputs))
+        )
+        pool.close()
+    elif args.bulk_indices_file:
+        with open(args.bulk_indices_file, "r") as f:
+            all_indices = f.read().splitlines()
+
+        chunks = np.array_split(all_indices, args.chunks)
+        inds_to_run = chunks[args.chunk_index]
+
+        outputs = list(
+            tqdm(pool.imap(precompute_slabs, inds_to_run), total=len(inds_to_run))
         )
         pool.close()
     else:
