@@ -37,13 +37,13 @@ class TestAdslab:
         assert np.all(
             np.isclose(
                 adslab.atoms_list[0].get_positions().mean(0),
-                np.array([6.90149959, 6.11998774, 16.17086441]),
+                np.array([6.89162565, 6.13528669, 16.19855907]),
             )
         )
         assert np.all(
             np.isclose(
                 adslab.atoms_list[1].get_positions().mean(0),
-                np.array([6.87679095, 6.49593958, 16.15652257]),
+                np.array([6.86943456, 6.48018977, 16.1635785]),
             )
         )
 

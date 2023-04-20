@@ -16,7 +16,7 @@ from scipy.optimize import fsolve
 from ocdata.core import Adsorbate, Slab
 from ocdata.core.adsorbate import randomly_rotate_adsorbate
 
-warnings.filterwarnings("ignore", "The iteration is not making good progress")
+# warnings.filterwarnings("ignore", "The iteration is not making good progress")
 
 
 class AdsorbateSlabConfig:
@@ -309,7 +309,9 @@ class AdsorbateSlabConfig:
         adsorbate_c2.translate(cell_center - site)
 
         # See which combos have a possible intersection event
-        combos = self._find_combos_to_check(adsorbate_c2, slab_c2, unit_normal)
+        combos = self._find_combos_to_check(
+            adsorbate_c2, slab_c2, unit_normal, interstitial_gap
+        )
 
         # Solve for the intersections
         def fun(x):
@@ -328,13 +330,18 @@ class AdsorbateSlabConfig:
                 n_scale = fsolve(fun, d_min * 3)
                 scaled_norms.append(n_scale[0])
             return max(scaled_norms)
-        else:  # Comment(@brookwander): this is a kinda scary edge case
+        else:
+            # Comment(@brookwander): this is a kinda scary edge case
             return (
                 0  # if there are no possible surface itersections, place it at the site
             )
 
     def _find_combos_to_check(
-        self, adsorbate_c2: ase.Atoms, slab_c2: ase.Atoms, unit_normal: np.ndarray
+        self,
+        adsorbate_c2: ase.Atoms,
+        slab_c2: ase.Atoms,
+        unit_normal: np.ndarray,
+        interstitial_gap: float,
     ):
         """
         Find the pairs of surface and adsorbate atoms that would have an intersection event
@@ -345,6 +352,8 @@ class AdsorbateSlabConfig:
             slab_c2 (ase.Atoms): A copy of the slab with atoms wrapped s.t. things are centered
                 about the site
             unit_normal (np.ndarray): the unit vector normal to the surface
+            interstitial_gap (float): the desired distance between the covalent radii of the
+                closest surface and adsorbate atom
 
         Returns:
             (list[lists]): each entry in the list corresponds to one pair to check. With the
@@ -368,7 +377,7 @@ class AdsorbateSlabConfig:
                 covalent_radii[atomic_numbers[adsorbate_elements[combo[0]]]]
                 + covalent_radii[atomic_numbers[slab_elements[combo[1]]]]
             )
-            if distance <= radial_distance:
+            if distance <= (radial_distance + interstitial_gap):
                 combos_to_check.append(
                     [combo, radial_distance, slab_c2.positions[combo[1]]]
                 )
