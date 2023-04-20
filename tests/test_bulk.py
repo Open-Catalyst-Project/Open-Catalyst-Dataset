@@ -24,6 +24,11 @@ class TestBulk:
         assert bulk.atoms.get_chemical_formula() == "Re2"
         assert bulk.bulk_id_from_db == self.idx
 
+    def test_bulk_init_from_src_id(self):
+        bulk = Bulk(bulk_src_id_from_db="mp-30")
+        assert bulk.atoms.get_chemical_formula() == "Cu"
+        assert bulk.src_id == "mp-30"
+
     def test_bulk_init_random(self):
         random.seed(1)
         np.random.seed(1)

@@ -1,5 +1,6 @@
 import os
 import pickle
+import warnings
 
 import ase
 import numpy as np
@@ -35,6 +36,7 @@ class Bulk:
         self,
         bulk_atoms: ase.Atoms = None,
         bulk_id_from_db: int = None,
+        bulk_src_id_from_db: str = None,
         bulk_db_path: str = BULK_PKL_PATH,
     ):
         self.bulk_id_from_db = bulk_id_from_db
@@ -47,11 +49,30 @@ class Bulk:
             bulk_db = pickle.load(open(bulk_db_path, "rb"))
             bulk_obj = bulk_db[bulk_id_from_db]
             self.atoms, self.src_id = bulk_obj["atoms"], bulk_obj["src_id"]
+        elif bulk_src_id_from_db is not None:
+            bulk_db = pickle.load(open(bulk_db_path, "rb"))
+            bulk_obj_tuple = [
+                (idx, bulk)
+                for idx, bulk in enumerate(bulk_db)
+                if bulk["src_id"] == bulk_src_id_from_db
+            ]
+            if len(bulk_obj_tuple) < 1:
+                warnings.warn(
+                    "A bulk with that src id was not found. Choosing one at random instead"
+                )
+                self._get_bulk_from_random(bulk_db)
+            else:
+                bulk_obj = bulk_obj_tuple[0][1]
+                self.bulk_id_from_db = bulk_obj_tuple[0][0]
+                self.atoms, self.src_id = bulk_obj["atoms"], bulk_obj["src_id"]
         else:
             bulk_db = pickle.load(open(bulk_db_path, "rb"))
-            self.bulk_id_from_db = np.random.randint(len(bulk_db))
-            bulk_obj = bulk_db[self.bulk_id_from_db]
-            self.atoms, self.src_id = bulk_obj["atoms"], bulk_obj["src_id"]
+            self._get_bulk_from_random(bulk_db)
+
+    def _get_bulk_from_random(self, bulk_db):
+        self.bulk_id_from_db = np.random.randint(len(bulk_db))
+        bulk_obj = bulk_db[self.bulk_id_from_db]
+        self.atoms, self.src_id = bulk_obj["atoms"], bulk_obj["src_id"]
 
     def set_source_dataset_id(self, src_id: str):
         self.src_id = src_id
