@@ -377,7 +377,7 @@ if __name__ == "__main__":
         chunks = np.array_split(all_indices, args.chunks)
         inds_to_run = chunks[args.chunk_index]
         print(
-            f"Running lines from {args.indices_file}, starting from {inds_to_run[0]} ending at {inds_to_run[1]}"
+            f"Running lines from {args.indices_file}, starting from {inds_to_run[0]} ending at {inds_to_run[-1]}"
         )
 
         pool_inputs = []

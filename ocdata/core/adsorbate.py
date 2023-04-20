@@ -76,12 +76,14 @@ def randomly_rotate_adsorbate(
         assert binding_idx is not None
         # Rotate about binding atom. Free to rotate uniformly about z, but only
         # slight wobbles around x and y, to avoid crashing into the surface.
-        atoms.rotate(np.random.randn() * 10, v="x", center=atoms.positions[binding_idx])
-        atoms.rotate(np.random.randn() * 10, v="y", center=atoms.positions[binding_idx])
-        atoms.rotate(
-            np.random.uniform(0, 360), v="z", center=atoms.positions[binding_idx]
-        )
+        x_angle = np.random.randn() * 10
+        y_angle = np.random.randn() * 10
+        z_angle = np.random.uniform(0, 360)
+        angles = np.array([x_angle, y_angle, z_angle])
+        atoms.rotate(x_angle, v="x", center=atoms.positions[binding_idx])
+        atoms.rotate(y_angle, v="y", center=atoms.positions[binding_idx])
+        atoms.rotate(z_angle, v="z", center=atoms.positions[binding_idx])
     else:
         raise NotImplementedError
 
-    return atoms
+    return atoms, angles

@@ -81,7 +81,7 @@ class AdsorbateSlabConfig:
         self.mode = mode
 
         self.sites = self.get_binding_sites(num_sites)
-        self.atoms_list = self.place_adsorbate_on_sites(
+        self.atoms_list, self.metadata_list = self.place_adsorbate_on_sites(
             self.sites,
             num_augmentations_per_site,
             interstitial_gap,
@@ -198,8 +198,9 @@ class AdsorbateSlabConfig:
             binding_idx = random.choice(self.adsorbate.binding_indices)
 
         # Rotate adsorbate along xyz, only if adsorbate has more than 1 atom.
+        sampled_angles = np.array([0, 0, 0])
         if len(self.adsorbate.atoms) > 1:
-            adsorbate_c = randomly_rotate_adsorbate(
+            adsorbate_c, sampled_angles = randomly_rotate_adsorbate(
                 adsorbate_c,
                 mode=self.mode,
                 binding_idx=binding_idx,
@@ -238,7 +239,8 @@ class AdsorbateSlabConfig:
             slab_c.cell
         )  # Comment (@brookwander): I think this is unnecessary?
         adsorbate_slab_config.pbc = [True, True, False]
-        return adsorbate_slab_config
+
+        return adsorbate_slab_config, sampled_angles
 
     def place_adsorbate_on_sites(
         self,
@@ -250,10 +252,15 @@ class AdsorbateSlabConfig:
         Place the adsorbate at the given binding sites.
         """
         atoms_list = []
+        metadata_list = []
         for site in sites:
             for _ in range(num_augmentations_per_site):
-                atoms_list.append(self.place_adsorbate_on_site(site, interstitial_gap))
-        return atoms_list
+                atoms, sampled_angles = self.place_adsorbate_on_site(
+                    site, interstitial_gap
+                )
+                atoms_list.append(atoms)
+                metadata_list.append({"site": site, "xyz_angles": sampled_angles})
+        return atoms_list, metadata_list
 
     def _get_scaled_normal(
         self,
@@ -415,6 +422,8 @@ class AdsorbateSlabConfig:
                 "shift": self.slab.shift,
                 "top": self.slab.top,
                 "smiles": self.adsorbate.smiles,
+                "site": self.metadata_list[ind]["site"],
+                "xyz_angles": self.metadata_list[ind]["xyz_angles"],
             },
         }
 
