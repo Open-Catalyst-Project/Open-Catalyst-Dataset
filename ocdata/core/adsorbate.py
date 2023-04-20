@@ -66,24 +66,36 @@ def randomly_rotate_adsorbate(
     adsorbate_atoms: ase.Atoms, mode: str = "random", binding_idx: int = None
 ):
     atoms = adsorbate_atoms.copy()
+    # To sample uniformly random 3D rotations, we first sample a uniformly
+    # random rotation about the z-axis. Then, rotate the unmoved north pole to a
+    # random position. This also makes it easier to implement the "heuristic"
+    # mode the second step can be changed to sample rotations only within a
+    # certain cone around the north pole.
+
     if mode == "random":
-        # Rotate about center of mass.
-        angles = np.random.uniform(0, 360, 3)
-        atoms.rotate(angles[0], v="x", center="COM")
-        atoms.rotate(angles[1], v="y", center="COM")
-        atoms.rotate(angles[2], v="z", center="COM")
+        # Rotate uniformly about center of mass along all three directions.
+        zrot = np.random.uniform(0, 360)
+        atoms.rotate(zrot, "z", center="COM")
+        z = np.random.uniform(-1.0, 1.0)
+        phi = np.random.uniform(0, 2 * np.pi)
+        rotvec = np.array(
+            [np.sqrt(1 - z * z) * np.cos(phi), np.sqrt(1 - z * z) * np.sin(phi), z]
+        )
+        atoms.rotate(a=(0, 0, 1), v=rotvec, center="COM")
     elif mode in ["heuristic", "random_site_heuristic_placement"]:
         assert binding_idx is not None
-        # Rotate about binding atom. Free to rotate uniformly about z, but only
+        # Rotate uniformly about binding atom along the z-axis, but only
         # slight wobbles around x and y, to avoid crashing into the surface.
-        x_angle = np.random.randn() * 10
-        y_angle = np.random.randn() * 10
-        z_angle = np.random.uniform(0, 360)
-        angles = np.array([x_angle, y_angle, z_angle])
-        atoms.rotate(x_angle, v="x", center=atoms.positions[binding_idx])
-        atoms.rotate(y_angle, v="y", center=atoms.positions[binding_idx])
-        atoms.rotate(z_angle, v="z", center=atoms.positions[binding_idx])
+        zrot = np.random.uniform(0, 360)
+        atoms.rotate(zrot, "z", center=atoms.positions[binding_idx])
+        # PI / 9 was arbitrarily chosen as the cone angle.
+        z = np.random.uniform(np.cos(np.pi / 9), 1.0)
+        phi = np.random.uniform(0, 2 * np.pi)
+        rotvec = np.array(
+            [np.sqrt(1 - z * z) * np.cos(phi), np.sqrt(1 - z * z) * np.sin(phi), z]
+        )
+        atoms.rotate(a=(0, 0, 1), v=rotvec, center=atoms.positions[binding_idx])
     else:
         raise NotImplementedError
 
-    return atoms, angles
+    return atoms, [zrot, rotvec]

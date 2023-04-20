@@ -2,9 +2,7 @@ import random
 
 import numpy as np
 import pytest
-
 from ase.data import covalent_radii
-
 from pymatgen.analysis.adsorption import AdsorbateSiteFinder
 from pymatgen.io.ase import AseAtomsAdaptor
 
@@ -39,13 +37,13 @@ class TestAdslab:
         assert np.all(
             np.isclose(
                 adslab.atoms_list[0].get_positions().mean(0),
-                np.array([6.92797537, 6.14142015, 16.21946298]),
+                np.array([6.90149959, 6.11998774, 16.17086441]),
             )
         )
         assert np.all(
             np.isclose(
                 adslab.atoms_list[1].get_positions().mean(0),
-                np.array([6.84505652, 6.48877279, 16.16821032]),
+                np.array([6.87679095, 6.49593958, 16.15652257]),
             )
         )
 
