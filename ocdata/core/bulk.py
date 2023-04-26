@@ -18,14 +18,18 @@ class Bulk:
     Initializes a bulk object in one of 3 ways:
     - Directly pass in an ase.Atoms object.
     - Pass in index of bulk to select from bulk database.
-    - Randomly sample a bulk from bulk database.
+    - Pass in the src_id of the bulk to select from the bulk database.
+    - Randomly sample a bulk from bulk database if no other
+        valid option is passed.
 
     Arguments
     ---------
     bulk_atoms: ase.Atoms
         Bulk structure.
     bulk_id_from_db: int
-        Index of bulk to select if not doing a random sample.
+        Index of bulk to select.
+    bulk_src_id_from_db: int
+        Src id of bulk to select.
     bulk_db_path: str
         Path to bulk database.
     precomputed_slabs_path: str
