@@ -8,7 +8,6 @@ import pymatgen
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 
-from ocdata.configs.constants import COVALENT_MATERIALS_MPIDS
 from ocdata.configs.paths import BULK_PKL_PATH, PRECOMPUTED_SLABS_DIR_PATH
 from ocdata.core.slab import Slab, compute_slabs
 

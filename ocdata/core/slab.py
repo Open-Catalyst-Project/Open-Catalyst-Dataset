@@ -93,6 +93,42 @@ class Slab:
             return cls(bulk, slab_atoms, millers, shift, top)
 
     @classmethod
+    def from_bulk_get_specific_millers(
+        cls, specific_millers, bulk=None, min_ab=8.0, save_path=None
+    ):
+        assert type(specific_millers) == tuple
+        assert len(specific_millers) == 3
+
+        if save_path is not None:
+            all_slabs = Slab.from_bulk_get_all_slabs(
+                bulk, max(np.abs(specific_millers)), min_ab, save_path
+            )
+            slabs_with_millers = [
+                slab for slab in all_slabs if slab.millers == specific_millers
+            ]
+            return slabs_with_millers
+        else:
+            # If we're not saving all slabs, just tile and tag those with correct millers
+            assert bulk is not None
+            untiled_slabs = compute_slabs(
+                bulk.atoms,
+                max_miller=max(np.abs(specific_millers)),
+                specific_millers=[specific_millers],
+            )
+            slabs = []
+            for s in untiled_slabs:
+                slabs.append(
+                    (
+                        tile_and_tag_atoms(s[0], bulk.atoms, min_ab=min_ab),
+                        s[1],
+                        s[2],
+                        s[3],
+                    )
+                )
+
+            return [cls(bulk, s[0], s[1], s[2], s[3]) for s in slabs]
+
+    @classmethod
     def from_bulk_get_all_slabs(
         cls, bulk=None, max_miller=2, min_ab=8.0, save_path=None
     ):
@@ -432,6 +468,7 @@ def calculate_coordination_of_bulk_atoms(bulk_atoms):
 def compute_slabs(
     bulk_atoms: ase.Atoms = None,
     max_miller: int = 2,
+    specific_millers: list = None,
 ):
     """
     Enumerates all the symmetrically distinct slabs of a bulk structure.
@@ -453,8 +490,13 @@ def compute_slabs(
     assert bulk_atoms is not None
     bulk_struct = standardize_bulk(bulk_atoms)
 
+    if specific_millers is None:
+        specific_millers = get_symmetrically_distinct_miller_indices(
+            bulk_struct, max_miller
+        )
+
     all_slabs_info = []
-    for millers in get_symmetrically_distinct_miller_indices(bulk_struct, max_miller):
+    for millers in specific_millers:
         slab_gen = SlabGenerator(
             initial_structure=bulk_struct,
             miller_index=millers,
@@ -468,11 +510,6 @@ def compute_slabs(
         slabs = slab_gen.get_slabs(
             tol=0.3, bonds=None, max_broken_bonds=0, symmetrize=False
         )
-
-        # Comment(@abhshkdz): How do we extend this to datasets beyond MP?
-        # Additional filtering for the 2D materials' slabs
-        # if self.mpid is not None and self.mpid in COVALENT_MATERIALS_MPIDS:
-        #     slabs = [slab for slab in slabs if is_2D_slab_reasonable(slab) is True]
 
         # If the bottom of the slabs are different than the tops, then we
         # want to consider them too.

@@ -14,6 +14,15 @@ class TestSlab:
         assert slabs[0].millers == (1, 1, 1)
         assert slabs[0].shift == 0.0
 
+    def test_slab_init_from_specific_millers(self):
+        bulk = Bulk(bulk_src_id_from_db="mp-30")
+        slabs = Slab.from_bulk_get_specific_millers(
+            specific_millers=(1, 1, 1), bulk=bulk
+        )
+
+        assert len(slabs) == 1
+        assert slabs[0].millers == (1, 1, 1)
+
     def test_slab_init_random(self):
         random.seed(1)
         np.random.seed(1)
