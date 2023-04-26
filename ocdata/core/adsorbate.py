@@ -1,5 +1,6 @@
 import os
 import pickle
+import warnings
 
 import ase
 import numpy as np
@@ -9,9 +10,10 @@ from ocdata.configs.paths import ADSORBATES_PKL_PATH
 
 class Adsorbate:
     """
-    Initializes an adsorbate object in one of 3 ways:
+    Initializes an adsorbate object in one of 4 ways:
     - Directly pass in an ase.Atoms object.
     - Pass in index of adsorbate to select from adsorbate database.
+    - Pass in the SMILES string of the adsorbate to select from the database.
     - Randomly sample an adsorbate from adsorbate database.
 
     Arguments
@@ -19,7 +21,9 @@ class Adsorbate:
     adsorbate_atoms: ase.Atoms
         Adsorbate structure.
     adsorbate_id_from_db: int
-        Index of adsorbate to select if not doing a random sample.
+        Index of adsorbate to select.
+    adsorbate_smiles_from_db: str
+        A SMILES string of the desired adsorbate.
     adsorbate_db_path: str
         Path to adsorbate database.
     """
@@ -28,6 +32,7 @@ class Adsorbate:
         self,
         adsorbate_atoms: ase.Atoms = None,
         adsorbate_id_from_db: int = None,
+        adsorbate_smiles_from_db: str = None,
         adsorbate_db_path: str = ADSORBATES_PKL_PATH,
     ):
         self.adsorbate_id_from_db = adsorbate_id_from_db
@@ -42,12 +47,26 @@ class Adsorbate:
             self.atoms, self.smiles, self.binding_indices = adsorbate_db[
                 adsorbate_id_from_db
             ]
+        elif adsorbate_smiles_from_db is not None:
+            adsorbate_db = pickle.load(open(adsorbate_db_path, "rb"))
+            adsorbate_obj_tuple = [
+                (idx, adsorbate_info)
+                for idx, adsorbate_info in adsorbate_db.items()
+                if adsorbate_info[1] == adsorbate_smiles_from_db
+            ]
+            if len(adsorbate_obj_tuple) < 1:
+                warnings.warn(
+                    "An adsorbate with that SMILES string was not found. Choosing one at random instead."
+                )
+                self._get_adsorbate_from_random(adsorbate_db)
+            else:
+                self.atoms, self.smiles, self.binding_indices = adsorbate_obj_tuple[0][
+                    1
+                ]
+                self.adsorbate_id_from_db = adsorbate_obj_tuple[0][0]
         else:
             adsorbate_db = pickle.load(open(adsorbate_db_path, "rb"))
-            self.adsorbate_id_from_db = np.random.randint(len(adsorbate_db))
-            self.atoms, self.smiles, self.binding_indices = adsorbate_db[
-                self.adsorbate_id_from_db
-            ]
+            self._get_adsorbate_from_random(adsorbate_db)
 
     def __len__(self):
         return len(self.atoms)
@@ -60,6 +79,12 @@ class Adsorbate:
 
     def __repr__(self):
         return self.__str__()
+
+    def _get_adsorbate_from_random(self, adsorbate_db):
+        self.adsorbate_id_from_db = np.random.randint(len(adsorbate_db))
+        self.atoms, self.smiles, self.binding_indices = adsorbate_db[
+            self.adsorbate_id_from_db
+        ]
 
 
 def randomly_rotate_adsorbate(
