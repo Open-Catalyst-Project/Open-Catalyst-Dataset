@@ -104,12 +104,17 @@ class StructureGenerator:
                 mode="heuristic",
             )
         if self.args.random_placements:
+            rotation_mode = (
+                "random"
+                if self.args.full_random_rotations
+                else "random_site_heuristic_placement"
+            )
             self.rand_adslabs = AdsorbateSlabConfig(
                 self.slab,
                 self.adsorbate,
                 self.args.random_sites,
                 self.args.num_augmentations,
-                mode="random",
+                mode=rotation_mode,
             )
 
         # write files
@@ -270,6 +275,12 @@ def parse_args():
         action="store_true",
         default=False,
         help="Generate random placements",
+    )
+    parser.add_argument(
+        "--full_random_rotations",
+        action="store_true",
+        default=False,
+        help="Random placements have full rotation around the sphere, as opposed to small wobbles around x&y",
     )
     parser.add_argument(
         "--heuristic_placements",
