@@ -118,7 +118,7 @@ class StructureGenerator:
             )
 
         # write files
-        self._write_surface()
+        write_surface(self.args, self.slab, self.bulk_index, self.surface_index)
         if self.heur_adslabs:
             self._write_adslabs(self.heur_adslabs, "heur")
         if self.rand_adslabs:
@@ -128,48 +128,6 @@ class StructureGenerator:
         self.logger.info(
             f"Completed adsorbate {self.adsorbate_index}, bulk {self.bulk_index}, surface {self.surface_index} ({round(end - start, 2)}s)"
         )
-
-    def _write_surface(self):
-        """
-        Writes vasp inputs and metadata for the slab alone
-        """
-
-        os.makedirs(
-            os.path.join(self.args.output_dir, f"bulk{self.bulk_index}"), exist_ok=True
-        )
-        os.makedirs(
-            os.path.join(
-                self.args.output_dir,
-                f"bulk{self.bulk_index}",
-                f"surface{self.surface_index}",
-            ),
-            exist_ok=True,
-        )
-
-        # write vasp files
-        slab_alone_dir = os.path.join(
-            self.args.output_dir,
-            f"bulk{self.bulk_index}",
-            f"surface{self.surface_index}",
-            "surface",
-        )
-        if not os.path.exists(os.path.join(slab_alone_dir, "POSCAR")):
-            # Skip surface if already written;
-            # this happens when we process multiple adsorbates per surface.
-            write_vasp_input_files(self.slab.atoms, slab_alone_dir)
-
-        # write metadata
-        metadata_path = os.path.join(
-            self.args.output_dir,
-            f"bulk{self.bulk_index}",
-            f"surface{self.surface_index}",
-            "surface",
-            "metadata.pkl",
-        )
-        if not os.path.exists(metadata_path):
-            metadata_dict = self.slab.get_metadata_dict()
-            with open(metadata_path, "wb") as f:
-                pickle.dump(metadata_dict, f)
 
     def _write_adslabs(self, adslab_obj, mode_str):
         """
@@ -196,6 +154,47 @@ class StructureGenerator:
             metadata_dict = adslab_obj.get_metadata_dict(adslab_ind)
             with open(metadata_path, "wb") as f:
                 pickle.dump(metadata_dict, f)
+
+
+def write_surface(args, slab, bulk_index, surface_index):
+    """
+    Writes vasp inputs and metadata for a specified  slab
+    """
+
+    os.makedirs(os.path.join(args.output_dir, f"bulk{bulk_index}"), exist_ok=True)
+    os.makedirs(
+        os.path.join(
+            args.output_dir,
+            f"bulk{bulk_index}",
+            f"surface{surface_index}",
+        ),
+        exist_ok=True,
+    )
+
+    # write vasp files
+    slab_alone_dir = os.path.join(
+        args.output_dir,
+        f"bulk{bulk_index}",
+        f"surface{surface_index}",
+        "surface",
+    )
+    if not os.path.exists(os.path.join(slab_alone_dir, "POSCAR")):
+        # Skip surface if already written;
+        # this happens when we process multiple adsorbates per surface.
+        write_vasp_input_files(slab.atoms, slab_alone_dir)
+
+    # write metadata
+    metadata_path = os.path.join(
+        args.output_dir,
+        f"bulk{bulk_index}",
+        f"surface{surface_index}",
+        "surface",
+        "metadata.pkl",
+    )
+    if not os.path.exists(metadata_path):
+        metadata_dict = slab.get_metadata_dict()
+        with open(metadata_path, "wb") as f:
+            pickle.dump(metadata_dict, f)
 
 
 def parse_args():
@@ -346,13 +345,14 @@ def parse_args():
 
 
 def precompute_slabs(bulk_ind):
-    # create adsorbate, bulk, and surface objects
     try:
         bulk = Bulk(bulk_id_from_db=int(bulk_ind), bulk_db_path=args.bulk_db)
-        bulk.get_slabs(
+        all_slabs = bulk.get_slabs(
             max_miller=args.max_miller,
             precomputed_slabs_dir=args.precomputed_slabs_dir,
         )
+        for surf_idx, slab in enumerate(all_slabs):
+            write_surface(args, slab, bulk_ind, surf_idx)
     except Exception:
         traceback.print_exc()
 
