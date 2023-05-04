@@ -122,7 +122,8 @@ class StructureGenerator:
         if self.heur_adslabs:
             self._write_adslabs(self.heur_adslabs, "heur")
         if self.rand_adslabs:
-            self._write_adslabs(self.rand_adslabs, "rand")
+            prefix = "rand" if rotation_mode == "random" else "randsh"
+            self._write_adslabs(self.rand_adslabs, prefix)
 
         end = time.time()
         self.logger.info(
