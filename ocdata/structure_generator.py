@@ -145,16 +145,19 @@ class StructureGenerator:
 
             # vasp files
             write_vasp_input_files(adslab_atoms, adslab_dir)
-            if self.args.no_vasp:
-                # A bit hacky but ASE defaults to writing everything out.
-                for unused_file in ["KPOINTS", "INCAR", "POTCAR"]:
-                    os.remove(os.path.join(adslab_dir, unused_file))
 
             # write dict for metadata
             metadata_path = os.path.join(adslab_dir, "metadata.pkl")
             metadata_dict = adslab_obj.get_metadata_dict(adslab_ind)
             with open(metadata_path, "wb") as f:
                 pickle.dump(metadata_dict, f)
+
+            if self.args.no_vasp:
+                # A bit hacky but ASE defaults to writing everything out.
+                for unused_file in ["KPOINTS", "INCAR", "POTCAR"]:
+                    unused_file_path = os.path.join(adslab_dir, unused_file)
+                    if os.path.isfile(unused_file_path):
+                        os.remove(unused_file_path)
 
 
 def write_surface(args, slab, bulk_index, surface_index):
