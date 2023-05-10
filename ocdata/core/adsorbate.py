@@ -11,7 +11,8 @@ from ocdata.configs.paths import ADSORBATES_PKL_PATH
 class Adsorbate:
     """
     Initializes an adsorbate object in one of 4 ways:
-    - Directly pass in an ase.Atoms object.
+    - Directly pass in an ase.Atoms object. For this, you should also
+        provide a binding index (see Args).
     - Pass in index of adsorbate to select from adsorbate database.
     - Pass in the SMILES string of the adsorbate to select from the database.
     - Randomly sample an adsorbate from adsorbate database.
@@ -26,6 +27,8 @@ class Adsorbate:
         A SMILES string of the desired adsorbate.
     adsorbate_db_path: str
         Path to adsorbate database.
+    adsorbate_binding_indices: list
+        The index/indices of the adsorbate atoms which are expected to bind.
     """
 
     def __init__(
@@ -34,14 +37,30 @@ class Adsorbate:
         adsorbate_id_from_db: int = None,
         adsorbate_smiles_from_db: str = None,
         adsorbate_db_path: str = ADSORBATES_PKL_PATH,
+        adsorbate_binding_indices: list = None,
     ):
         self.adsorbate_id_from_db = adsorbate_id_from_db
         self.adsorbate_db_path = adsorbate_db_path
 
+        if adsorbate_atoms is None and adsorbate_binding_indices is not None:
+            warnings.warn(
+                "adsorbates from the database have predefined binding indexes, those will be used instead."
+            )
+
         if adsorbate_atoms is not None:
             self.atoms = adsorbate_atoms.copy()
             self.smiles = None
-            self.binding_indices = None
+            if adsorbate_binding_indices is None:
+                random_idx = np.random.randint(len(adsorbate_atoms))
+                self.binding_indices = [random_idx]
+                warnings.warn(
+                    "\nNo binding index was provided, so one was chosen at random.\n"
+                    "If you plan to use heuristic placement, this may cause unexpected behavior.\n"
+                    f"The binding atom index is {random_idx} "
+                    f"and the chemical symbol is {adsorbate_atoms.get_chemical_symbols()[random_idx]}"
+                )
+            else:
+                self.binding_indices = adsorbate_binding_indices
         elif adsorbate_id_from_db is not None:
             adsorbate_db = pickle.load(open(adsorbate_db_path, "rb"))
             self.atoms, self.smiles, self.binding_indices = adsorbate_db[
