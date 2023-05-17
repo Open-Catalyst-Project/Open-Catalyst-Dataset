@@ -12,81 +12,132 @@ The easiest way to install prerequisites is via [conda](https://conda.io/docs/in
 * Create a new environment, `vaspenv`, `conda create -n vaspenv python=3.9`
 * Activate the newly created environment to install the required dependencies: `conda activate vaspenv`
 * Install specific versions of Pymatgen and ASE: `pip install pymatgen==2023.1.20 ase==3.22.1`
-* Install Catkit from Github: `pip install git+https://github.com/ulissigroup/CatKit.git catkit`
 * Clone this repo and install with: `pip install -e .`
 
 ## Workflow
 
-The codebase supports the following workflow to sample a catalyst+adsorbate system. We start by selecting the number of elements in the bulk material. A bulk structure with this number of elements is selected at random.  A surface is then randomly selected from all symmetrically distinct surfaces from the material with Miller indices less than or equal to 2. A randomly selected adsorbate is then placed over this surface.
+The codebase supports the following workflow to generate adsorbate-slab configurations. A bulk atoms object may be provided, selected by `bulk_id` (i.e. `mp-30`), selected by its index in the database, or selected randomly.  Similarly, an adsorbate atoms object may be provided, selected by its SMILES string (i.e. `*H`), selected by its index in the database, or selected randomly. From the `Bulk` class, slabs may be enumerated which uses `pymatgen.core.surface.SlabGenerator`. This may be done three ways: (1) All slabs up to a specifiable miller index, (2) A random slab among those enumerated by (1) may be selected, or (3) a specific miller index may be enumerated. Once slab(s) have been enumerated, adsorbate placement may be performed. We use custom code inspired by what is implemented in pymatgen to do this. There are 3 placement modes: `random`, `heuristic`, and `random_site_heuristic_placement`. For all, a Delaunay meshgrid is constructed with surface atoms as nodes. For `heuristic` and `random_site_heuristic_placement` the adsorbate is randomly rotated in the z direction and provided some random "wobble", which is randomized tilt within a certain cone around the north pole.  For `heuristic` the adsorbate is placed on the node (atop), between 2 nodes (bridge) and in the center of the triangle (hollow). The adsorbate database includes information about which atoms are expected to bind. The binding atom is placed at the site. For `random_site_heuristic_placement` the binding atom is placed at the site as is for `heuristic`, but positions of the sites are randomly sampled along the Delaunay triangle. For `random`, the adsorbate is randomly rotated about its center of mass. The positions of the sites are randomly sampled along the Delaunay triangle and the center of mass of the adsorbate is placed at the site. 
 
-In addition to sampling a single catalyst+adsorbate system, we could also enumerate multiple different inputs. At each step, “select” may mean randomly sample or choose a specified object as input by the user, as described in further detail in the next section.
+![Workflow image](ocdata_workflow.png)
 
-![Workflow image](workflow_image.png)
+## Use
+Here is a simple example using the ocdata infra to place CO on Cu (1,1,1):
+```
+bulk_src_id = "mp-30"
+adsorbate_smiles = "*CO"
 
-## APIs supported
+bulk = Bulk(bulk_src_id_from_db = bulk_src_id, bulk_db_path = "your-path-here.pkl")
+adsorbate = Adsorbate(adsorbate_smiles_from_db=adsorbate_smiles, adsorbate_db_path = "your-path-here.pkl")
+slabs = Slab.from_bulk_get_specific_millers(bulk = bulk, specific_millers=(1,1,1))
 
-These are the supported use cases and how to run them:
+# Perform heuristic placements
+heuristic_adslabs = AdsorbateSlabConfig(slabs[0], adsorbate, mode="heuristic")
 
-1. Generate VASP input files for one random adsorbate/bulk/surface/config combination, based on a specified random seed. This follows the workflow described in the diagram above, where every step to “select” a material is randomly sampled. The provided bulk database should be a dict of {number of elements: list of corresponding bulks}. For the following example, files will be in two directories, `outputs/random0/surface/` and `outputs/random0/adslab/`.
+# Perform random site, heuristic placements
+random_adslabs = AdsorbateSlabConfig(slabs[0], adsorbate, mode="random_site_heuristic_placement", num_sites = 100)
+```
+If you want to use a bulk and/or adsorbate that is not in the database here, you may supply your own atoms object like so:
+```
+bulk = Bulk(bulk_atoms = your_adsorbate_atoms)
+adsorbate = Adsorbate(adsorbate_atoms=your_adsorbate_atoms)
+slabs = Slab.from_bulk_get_all_slabs(bulk)
+
+# Perform fully random placements
+random_adslabs = AdsorbateSlabConfig(slabs[0], adsorbate, mode="random", num_sites = 100)
+```
+If you would like to randomly choose a bulk, adsorbate, and slab:
+```
+bulk = Bulk()
+adsorbate = Adsorbate()
+slab = Slab.from_bulk_get_random_slab(bulk)
+
+# Perform fully random placements
+random_adslabs = AdsorbateSlabConfig(slab, adsorbate, mode="random", num_sites = 100)
+```
+
+
+## API supported
+
+Generation may be facillitated using the `structure_generator.py` script. There are a number of options to configure input generation to suit different use cases. Below are the command line arguments and a few examples of use.
+
+### Command Line Args
+
+*Input Files:*
+1. `--bulk_db` (required): path to the bulk database file
+2. `--adsorbate_db`: path to the adsorbate database file - required if adsorbate placement is to be performed.
+3. `--precomputed_slabs_dir`: path to the precomputed slab directory, which saves cost/time if the slab has already been enumerated.
+
+*Material / adsorbate specification:*
+Option 1: provide indices both must be provided to generate adsorbate-slab configurations, otherwise only slab enumeration will be performed.
+1. `--adsorbate_index`: index of the desired adsorbate in the database file.
+2. `--bulk_index`: index of the desired bulk
+3. `--surface_index`: index of the desired surface
+
+Option 2: provide a set of indices (one of the following)
+1. `--indices_file`: a file containing strings with the following format `f"{adsorbate_idx}_{bulk_idx}_{surface_idx}"`. This will make slab enumeration and adsorbate slab enumeration be performed.
+2. `--bulk_indices_file`: a file containing bulk indices, which will spark slab generation only
+ 
+
+*Slab Enumeration:*
+1. `--max_miller`: The max miller index of slabs to be generated (i.e. 1, 2, or 3)
+
+*Adsorbate Placement:*
+1. `--seed`: Random seed for sampling/random sites generation.
+2. `--random_placements`: To be provided if random sites are desired.
+3. `--full_random_rotations`: To be provided in addition to `--random_placements` if fully random placements are desired.
+4. `--heuristic_placements`: To be provided if heuristic placements are desired.
+5. `--random_sites`: the number of sites per slab, which should be provided if `--full_random_rotations` or `--random_placements` are used.
+6. `--num_augmentations`: The number of random adsorbate configurations per site (defaults to 1).
+
+*Multiprocessing:*
+1. `--chunks`: For multi-node processing, number of chunks to split inputs across.
+2. `--chunk_index`: For multi-node processing, index of chunk to process.
+3. `--workers`: Number of workers for multiprocessing when given a file of indices
+
+*Outputs:*
+1. `--output_dir`: directory to save outputs
+2. `--no_vasp`: dictate that VASP input files should not be written
+3. `--verbose`: if detailed info should be logged
+
+### Use
+```
+python structure_generator.py \
+  --bulk_db databases/pkls/bulks.pkl \
+  --adsorbate_db databases/pkls/adsorbates.pkl  \
+  --output_dir outputs/ \
+  --adsorbate_index 0 \
+  --bulk_index 0 \
+  --surface_index 0 \
+  --heuristic_placements
+```
 
 ```
-python sample_structure.py --bulk_db bulk_db_nelems.pkl \
-  --adsorbate_db adsorbate_db.pkl  \
-  --output_dir outputs/ --seed 0
+python structure_generator.py \
+  --bulk_db databases/pkls/bulks.pkl \
+  --adsorbate_db databases/pkls/adsorbates.pkl  \
+  --indices_file your_index_file.txt \
+  --seed 0 \
+  --random_placements \
+  --random_sites 100
+  
 ```
 
-2. Generate one specified adsorbate, one more more specified bulks, and all possible surfaces and configs. The following example generates files for all adsorbate placements of adsorbate 10 on all possible surfaces from bulk 20. Files will be stored in `outputs/10_20_0/surface/`, `outputs/10_20_0/adslab0/`, `outputs/10_20_0/adslab1/`, ..., `outputs/10_20_1/surface/`, `outputs/10_20_1/adslab0/`, and so on for all combinations of surfaces and adsorbate+surface configs. You may also choose multiple bulks (and all of their surfaces and adsorbate+surface configs) by giving a comma separated list of bulk indices.
 
-```
-python sample_structure.py --bulk_db bulk_db_flat.pkl \
-  --adsorbate_db adsorbate_db.pkl \
-  --output_dir outputs/  \
-  --enumerate_all_structures \
-  --adsorbate_index 10 --bulk_indices 20
-```
-
-3. Generate one specified adsorbate, one or more specified bulks, one specified surface, and all possible configs. This is the same as #2 except only one surface is selected, which can be used to help parallelize #2. The following example generates files for all adsorbate placements of adsorbate 10 on surface 0 from bulk 20, resulting in files in `outputs/10_20_0/surface/`, `outputs/10_20_0/adslab0/`, `outputs/10_20_0/adslab1/`, and so on for all the adsorbate+surface configs.
-
-```
-python sample_structure.py --bulk_db bulk_db_flat.pkl \
-  --adsorbate_db adsorbate_db.pkl --output_dir outputs/
-  --enumerate_all_structures --adsorbate_index 10
-  --bulk_indices 20 --surface_index 0
-```
-
-For any of the above, `--precomputed_structures dir/`  can be added to use the precomputed surfaces rather than calculating all possible surfaces of a given bulk from scratch. Adding `--verbose` will print out additional info.
-
-
-## Generating inputs for OC20
-
-### Background
-
-We employed the workflow as described above to create the OC20 dataset. We considered bulk materials with up to 3 elements. A total of ~15k bulk structures and 82 adsorbates were considered for sampling. The resulting decision tree was huge since the branching factor at every stage in the workflow is reasonably big. For instance, sampling a surface from a chosen bulk requires considering at most 125 different miller-index calculations. Moreover, placing an adsorbate on a given surface requires enumerating ~30 sites on an average.
-
-We generated around 2.5M adsorbate+catalyst inputs which were then deduplicated before running DFT calculations.  Each input system was generated on a single CPU core with a timeout of 200 minutes.
-
-
-### Databases for bulk, adsorbate and precomputed surfaces
+## Databases for bulk, adsorbate and precomputed surfaces
 
 **Bulks**
 
-Bulk database that is a dict where keys are the number of elements (1-3), and values are lists of bulks, for use case #1 above where we randomly sample a bulk given the number of elements:
-
-* The latest version is https://dl.fbaipublicfiles.com/opencatalystproject/data/input_generation/bulk_db_nelems_2021sep20.pkl (MD5 checksum: `4bb119062019c4624987fa1ac92bd837`)
-
-Flat bulk database (all ~11k bulks in one list), for use cases #2 and #3 above, where we want to retrieve bulks by their index: https://dl.fbaipublicfiles.com/opencatalystproject/data/input_generation/bulk_db_flat_2021sep20.pkl (MD5 checksum: `43df744a8366c25392e3072d445016b2`).
-
-* Corresponding mapping between indices and bulks (MPID and composition): https://dl.fbaipublicfiles.com/opencatalystproject/data/input_generation/mapping_bulks_2021sep20.txt
+A database of bulk materials taken from existing databases (i.e. Materials Project) and relaxed with consistent RPBE settings may be found in `ocdata/databases/pkls/bulks.pkl`. To preview what bulks are available, view the corresponding mapping between indices and bulks (bulk id and composition): https://dl.fbaipublicfiles.com/opencatalystproject/data/input_generation/mapping_bulks_2021sep20.txt
 
 **Adsorbates**
-
+A database of adsorbates may be found in `ocdata/databases/pkls/adsorbates.pkl`. Alternatively, it may be downloaded using the following link:
 The latest version is https://dl.fbaipublicfiles.com/opencatalystproject/data/input_generation/adsorbate_db_2021apr28.pkl (MD5 checksum: `975e00a62c7b634b245102e42167b3fb`).
-* Corresponding mapping between indices and adsorbates (SMILES): https://dl.fbaipublicfiles.com/opencatalystproject/data/input_generation/mapping_adsorbates_2020may12.txt
+To preview what adsorbates are available, view the corresponding mapping between indices and adsorbates (SMILES): https://dl.fbaipublicfiles.com/opencatalystproject/data/input_generation/mapping_adsorbates_2020may12.txt
 
 
 **Precomputed surfaces**
 
-To speed up surface sampling from a chosen bulk material we precomputed surface enumerations. These can be found here: https://dl.fbaipublicfiles.com/opencatalystproject/data/input_generation/precomputed_surfaces_2021sep20.tar.gz (5.5GB, MD5 checksum: `f56fe10f380d945d46a1bfab136a4834`)
+To speed up surface sampling from a chosen bulk material we precomputed surface enumerations up to miller index 2. These can be found here: https://dl.fbaipublicfiles.com/opencatalystproject/data/input_generation/precomputed_surfaces_2021sep20.tar.gz (5.5GB, MD5 checksum: `f56fe10f380d945d46a1bfab136a4834`)
 
 Note that uncompressing this file will result in the folder `precomputed_surfaces_2021june11/`
 (uncompressed size 18GB). It has 11k pickle files, with filename format `<zero-based-index>.pkl`, one for each of the bulk materials based on the bulk indices.
@@ -94,25 +145,7 @@ Note that uncompressing this file will result in the folder `precomputed_surface
 
 **Note**
 
-OC20 was generated with an older version of the bulks (https://dl.fbaipublicfiles.com/opencatalystproject/data/input_generation/bulk_db_nelems_2020may12.pkl (MD5 checksum: `b87281d01a2006586fa719a1d2ee2682`), which has 50 duplicated bulk entries that are now removed in the latest version, and an older version of the adsorbates (https://dl.fbaipublicfiles.com/opencatalystproject/data/input_generation/adsorbate_db_2020may12.pkl, MD5 checksum: `6c553a7c2009e11612c247ffb813fd74`), which contains an inconsistency that is fixed in the latest version.
-
-
-### Deduplicating redundant input systems
-
-In order to make sure that we run VASP simulations on unique input systems, we employ a deduplication strategy to detect redundant input systems. To that end, we store a unique string summarizing the traversal on the sampling decision tree as metadata information. Using this unique string, we deduplicate any set of generated inputs comparing them against the previously generated inputs.
-
-
-### Sample generation for OC20
-
-The structures are sampled randomly as in use case #1 from above. We passed in 0-2500000 as random seeds for the OC20 dataset.
-
-```
-python sample_structure.py --bulk_db bulk_db_nelems_2020may12.pkl \
-  --adsorbate_db adsorbate_db_2020may12.pkl \
-  --precomputed_structures precomputed_structure_info_oc20/
-  --output_dir outputs/ --seed 0
-```
-
+OC20 was generated with an older version of the bulks and this repository. If you would like to reproduce that work exactly, see `README_legacy_OC20.md`
 
 ## Citation
 
