@@ -16,7 +16,7 @@ The easiest way to install prerequisites is via [conda](https://conda.io/docs/in
 
 ## Workflow
 
-The codebase supports the following workflow to generate adsorbate-slab configurations. A bulk atoms object may be provided, selected by `bulk_id` (i.e. `mp-30`), selected by its index in the database, or selected randomly.  Similarly, an adsorbate atoms object may be provided, selected by its SMILES string (i.e. `*H`), selected by its index in the database, or selected randomly. From the `Bulk` class, slabs may be enumerated which uses `pymatgen.core.surface.SlabGenerator`. This may be done three ways: (1) All slabs up to a specifiable miller index, (2) A random slab among those enumerated by (1) may be selected, or (3) a specific miller index may be enumerated. Once slab(s) have been enumerated, adsorbate placement may be performed. We use custom code inspired by what is implemented in pymatgen to do this. There are 3 placement modes: `random`, `heuristic`, and `random_site_heuristic_placement`. For all, a Delaunay meshgrid is constructed with surface atoms as nodes. For `heuristic` and `random_site_heuristic_placement` the adsorbate is randomly rotated in the z direction and provided some random "wobble", which is randomized tilt within a certain cone around the north pole.  For `heuristic` the adsorbate is placed on the node (atop), between 2 nodes (bridge) and in the center of the triangle (hollow). The adsorbate database includes information about which atoms are expected to bind. The binding atom is placed at the site. For `random_site_heuristic_placement` the binding atom is placed at the site as is for `heuristic`, but positions of the sites are randomly sampled along the Delaunay triangle. For `random`, the adsorbate is randomly rotated about its center of mass. The positions of the sites are randomly sampled along the Delaunay triangle and the center of mass of the adsorbate is placed at the site. 
+The codebase supports the following workflow to generate adsorbate-slab configurations. A bulk atoms object may be provided, selected by `bulk_id` (i.e. `mp-30`), selected by its index in the database, or selected randomly.  Similarly, an adsorbate atoms object may be provided, selected by its SMILES string (i.e. `*H`), selected by its index in the database, or selected randomly. From the `Bulk` class, slabs may be enumerated which uses `pymatgen.core.surface.SlabGenerator`. This may be done three ways: (1) All slabs up to a specifiable miller index, (2) A random slab among those enumerated by (1) may be selected, or (3) a specific miller index may be enumerated. Once slab(s) have been enumerated, adsorbate placement may be performed. We use custom code inspired by what is implemented in pymatgen to do this. There are 3 placement modes: `random`, `heuristic`, and `random_site_heuristic_placement`. For all, a Delaunay meshgrid is constructed with surface atoms as nodes. For `heuristic` and `random_site_heuristic_placement` the adsorbate is randomly rotated in the z direction and provided some random "wobble", which is randomized tilt within a certain cone around the north pole.  For `heuristic` the adsorbate is placed on the node (atop), between 2 nodes (bridge) and in the center of the triangle (hollow). The adsorbate database includes information about which atoms are expected to bind. The binding atom is placed at the site. For `random_site_heuristic_placement` the binding atom is placed at the site as is for `heuristic`, but positions of the sites are randomly sampled along the Delaunay triangle. For `random`, the adsorbate is randomly rotated about its center of mass. The positions of the sites are randomly sampled along the Delaunay triangle and the center of mass of the adsorbate is placed at the site.
 
 ![Workflow image](ocdata_workflow.png)
 
@@ -65,9 +65,10 @@ Generation may be facillitated using the `structure_generator.py` script. There 
 *Input Files:*
 1. `--bulk_db` (required): path to the bulk database file
 2. `--adsorbate_db`: path to the adsorbate database file - required if adsorbate placement is to be performed.
-3. `--precomputed_slabs_dir`: path to the precomputed slab directory, which saves cost/time if the slab has already been enumerated.
+3. `--precomputed_slabs_dir`: path to the precomputed slab directory, which saves cost/time if the slabs for each bulk have already been enumerated.
 
 *Material / adsorbate specification:*
+
 Option 1: provide indices both must be provided to generate adsorbate-slab configurations, otherwise only slab enumeration will be performed.
 1. `--adsorbate_index`: index of the desired adsorbate in the database file.
 2. `--bulk_index`: index of the desired bulk
@@ -76,27 +77,26 @@ Option 1: provide indices both must be provided to generate adsorbate-slab confi
 Option 2: provide a set of indices (one of the following)
 1. `--indices_file`: a file containing strings with the following format `f"{adsorbate_idx}_{bulk_idx}_{surface_idx}"`. This will make slab enumeration and adsorbate slab enumeration be performed.
 2. `--bulk_indices_file`: a file containing bulk indices, which will spark slab generation only
- 
 
 *Slab Enumeration:*
-1. `--max_miller`: The max miller index of slabs to be generated (i.e. 1, 2, or 3)
+1. `--max_miller`: the max miller index of slabs to be generated (i.e. 1, 2, or 3)
 
 *Adsorbate Placement:*
-1. `--seed`: Random seed for sampling/random sites generation.
-2. `--random_placements`: To be provided if random sites are desired.
-3. `--full_random_rotations`: To be provided in addition to `--random_placements` if fully random placements are desired.
-4. `--heuristic_placements`: To be provided if heuristic placements are desired.
-5. `--random_sites`: the number of sites per slab, which should be provided if `--full_random_rotations` or `--random_placements` are used.
-6. `--num_augmentations`: The number of random adsorbate configurations per site (defaults to 1).
+1. `--seed`: random seed for sampling/random sites generation.
+2. `--heuristic_placements`: to be provided if heuristic placements are desired.
+3. `--random_placements`: to be provided if random sites are desired. You may do both heurstic and random placements in the same run.
+4. `--full_random_rotations`: to be provided in addition to `--random_placements` if fully random placements are desired, as opposed to small wobbles around x/y axis.
+5. `--random_sites`: the number of sites per slab, which should be provided if `--random_placements` are used.
+6. `--num_augmentations`: the number of random adsorbate configurations per site (defaults to 1).
 
-*Multiprocessing:*
-1. `--chunks`: For multi-node processing, number of chunks to split inputs across.
-2. `--chunk_index`: For multi-node processing, index of chunk to process.
-3. `--workers`: Number of workers for multiprocessing when given a file of indices
+*Multiprocessing, when given a file of indices:*
+1. `--chunks`: for multi-node processing, number of chunks to split inputs across.
+2. `--chunk_index`: for multi-node processing, index of chunk to process.
+3. `--workers`: number of workers for multiprocessing within one job
 
 *Outputs:*
 1. `--output_dir`: directory to save outputs
-2. `--no_vasp`: dictate that VASP input files should not be written
+2. `--no_vasp`: for VASP input files, only write POSCAR and do not write INCAR, KPOINTS, or POTCAR
 3. `--verbose`: if detailed info should be logged
 
 ### Use
@@ -119,7 +119,7 @@ python structure_generator.py \
   --seed 0 \
   --random_placements \
   --random_sites 100
-  
+
 ```
 
 
