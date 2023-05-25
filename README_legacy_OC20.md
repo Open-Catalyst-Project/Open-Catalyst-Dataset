@@ -1,8 +1,6 @@
 # Open-Catalyst-Dataset
 
-**NOTE**: For the repository to be used as it was for OC20, use a version on or before this commit: [17e350](https://github.com/Open-Catalyst-Project/Open-Catalyst-Dataset/commit/17e350e484cf634f750d8764f376e443cc51b60a).
-
-This may be used as reference to reproduce the input generation workflow used in the Open Catalyst Project OC20 Dataset.
+**NOTE**: For the repository to be used as it was for the Open Catalyst 2020 (OC20) dataset, use a version on or before this commit: [17e350](https://github.com/Open-Catalyst-Project/Open-Catalyst-Dataset/commit/17e350e484cf634f750d8764f376e443cc51b60a).
 
 ## Setup
 
