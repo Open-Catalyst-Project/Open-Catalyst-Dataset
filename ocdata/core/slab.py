@@ -184,10 +184,8 @@ class Slab:
         return np.any(self.atoms.get_tags() == 1)
 
     def get_metadata_dict(self):
-        """
-        Returns a dict containing the atoms object and metadata,
-        used for writing to files.
-        """
+        # Returns a dict containing the atoms object and metadata,
+        # used for writing to files.
         return {
             "slab_atomsobject": self.atoms,
             "slab_metadata": {
@@ -243,31 +241,35 @@ def tile_and_tag_atoms(
     )
 
 
-def set_fixed_atom_constraints(slab_atoms):
+def set_fixed_atom_constraints(atoms):
     """
     This function fixes sub-surface atoms of a surface. Also works on systems
     that have surface + adsorbate(s), as long as the bulk atoms are tagged with
     `0`, surface atoms are tagged with `1`, and the adsorbate atoms are tagged
     with `2` or above.
 
-    This function is used for both surface atoms and the combined surface+adsorbate
+    This is used for both surface atoms and the combined surface+adsorbate.
 
-    Inputs:
-        atoms           `ase.Atoms` class of the surface system. The tags of
-                        these atoms must be set such that any bulk/surface
-                        atoms are tagged with `0` or `1`, resectively, and any
-                        adsorbate atom is tagged with a 2 or above.
-    Returns:
-        atoms           A deep copy of the `atoms` argument, but where the appropriate
-                        atoms are constrained.
+    Arguments
+    ---------
+    atoms: ase.Atoms
+        Atoms object of the slab or slab+adsorbate system, with bulk atoms
+        tagged as `0`, surface atoms tagged as `1`, and adsorbate atoms tagged
+        as `2` or above.
+
+    Returns
+    -------
+    atoms: ase.Atoms
+        A deep copy of the `atoms` argument, but where the appropriate
+        atoms are constrained.
     """
     # We'll be making a `mask` list to feed to the `FixAtoms` class. This
     # list should contain a `True` if we want an atom to be constrained, and
     # `False` otherwise.
-    slab_atoms = slab_atoms.copy()
-    mask = [True if atom.tag == 0 else False for atom in slab_atoms]
-    slab_atoms.constraints += [FixAtoms(mask=mask)]
-    return slab_atoms
+    atoms = atoms.copy()
+    mask = [True if atom.tag == 0 else False for atom in atoms]
+    atoms.constraints += [FixAtoms(mask=mask)]
+    return atoms
 
 
 def tag_surface_atoms(
@@ -281,11 +283,17 @@ def tag_surface_atoms(
     (adapted from `pymatgen.core.surface.Slab.get_surface_sites`; see
     https://pymatgen.org/pymatgen.core.surface.html) and a distance cutoff.
 
-    Arg:
-        slab_atoms      The slab where you are trying to find surface sites in
-                        `ase.Atoms` format
-        bulk_atoms      `ase.Atoms` format of the respective bulk structure
+    Arguments
+    ---------
+    slab_atoms: ase.Atoms
+        The slab where you are trying to find surface sites.
+    bulk_atoms: ase.Atoms
+        The bulk structure that the surface was cut from.
 
+    Returns
+    -------
+    slab_atoms: ase.Atoms
+        A copy of the slab atoms with the surface atoms tagged as 1.
     """
     assert slab_atoms is not None
     slab_atoms = slab_atoms.copy()
@@ -477,15 +485,23 @@ def compute_slabs(
     if they are distinct from the top. If they are distinct, we flip the
     surface so the bottom is pointing upwards.
 
-    Args:
-        max_miller  An integer indicating the maximum Miller index of the slabs
-                    you are willing to enumerate. Increasing this argument will
-                    increase the number of slabs, but the slabs will
-                    generally become larger.
-    Returns:
-        all_slabs_info  A list of 4-tuples containing:  `Structure`
-                        objects for slabs we have enumerated, the Miller
-                        indices, floats for the shifts, and Booleans for "top".
+    Arguments
+    ---------
+    bulk_atoms: ase.Atoms
+        The bulk structure.
+    max_miller: int
+        The maximum Miller index of the slabs to enumerate. Increasing this
+        argument will increase the number of slabs, and the slabs will generally
+        become larger.
+    specific_millers: list
+        A list of Miller indices that you want to enumerate. If this argument
+        is not `None`, then the `max_miller` argument is ignored.
+
+    Returns
+    -------
+    all_slabs_info: list
+        A list of 4-tuples containing pymatgen structure objects for enumerated
+        slabs, the Miller indices, floats for the shifts, and booleans for top.
     """
     assert bulk_atoms is not None
     bulk_struct = standardize_bulk(bulk_atoms)
@@ -539,7 +555,7 @@ def flip_struct(struct: Structure):
     Returns
     -------
     flipped_struct: Structure
-        object of the flipped surface.
+        pymatgen structure object of the flipped surface.
     """
     atoms = AseAtomsAdaptor.get_atoms(struct)
 
@@ -561,10 +577,10 @@ def is_structure_invertible(struct: Structure):
     This function figures out whether or not an `Structure`
     object has symmetricity. In this function, the affine matrix is a rotation
     matrix that is multiplied with the XYZ positions of the crystal. If the z,z
-    component of that is negative, it means symmetry operation exist, it could be a
-    mirror operation, or one that involves multiple rotations/etc. Regardless,
-    it means that the top becomes the bottom and vice-versa, and the structure
-    is the symmetric. i.e. structure_XYZ = structure_XYZ*M.
+    component of that is negative, it means symmetry operation exist, it could
+    be a mirror operation, or one that involves multiple rotations/etc.
+    Regardless, it means that the top becomes the bottom and vice-versa, and the
+    structure is the symmetric. i.e. structure_XYZ = structure_XYZ*M.
 
     In short:  If this function returns `False`, then the input structure can
     be flipped in the z-direction to create a new structure.
@@ -572,11 +588,12 @@ def is_structure_invertible(struct: Structure):
     Arguments
     ---------
     struct: Structure
+        pymatgen structure object of the slab.
 
     Returns
     -------
-    A boolean indicating whether or not your `ase.Atoms` object is
-    symmetric in z-direction (i.e. symmetric with respect to x-y plane).
+        A boolean indicating whether or not your `ase.Atoms` object is
+        symmetric in z-direction (i.e. symmetric with respect to x-y plane).
     """
     # If any of the operations involve a transformation in the z-direction,
     # then the structure is invertible.
@@ -602,12 +619,12 @@ def standardize_bulk(atoms: ase.Atoms):
     Arguments
     ---------
     atoms: ase.Atoms
-        `ase.Atoms` object of the bulk you want to standardize
+        `ase.Atoms` object of the bulk you want to standardize.
 
     Returns
     -------
     standardized_struct: Structure
-        object of the standardized bulk
+        pymatgen structure object of the standardized bulk.
     """
     struct = AseAtomsAdaptor.get_structure(atoms)
     sga = SpacegroupAnalyzer(struct, symprec=0.1)

@@ -4,31 +4,27 @@ import warnings
 
 import ase
 import numpy as np
-import pymatgen
-from pymatgen.io.ase import AseAtomsAdaptor
-from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 
-from ocdata.configs.paths import BULK_PKL_PATH, PRECOMPUTED_SLABS_DIR_PATH
-from ocdata.core.slab import Slab, compute_slabs
+from ocdata.configs.paths import BULK_PKL_PATH
+from ocdata.core.slab import Slab
 
 
 class Bulk:
     """
-    Initializes a bulk object in one of 3 ways:
+    Initializes a bulk object in one of 4 ways:
     - Directly pass in an ase.Atoms object.
     - Pass in index of bulk to select from bulk database.
     - Pass in the src_id of the bulk to select from the bulk database.
-    - Randomly sample a bulk from bulk database if no other
-        valid option is passed.
+    - Randomly sample a bulk from bulk database if no other option is passed.
 
     Arguments
     ---------
     bulk_atoms: ase.Atoms
         Bulk structure.
     bulk_id_from_db: int
-        Index of bulk to select.
+        Index of bulk in database pkl to select.
     bulk_src_id_from_db: int
-        Src id of bulk to select.
+        Src id of bulk to select (e.g. "mp-30").
     bulk_db_path: str
         Path to bulk database.
     precomputed_slabs_path: str
@@ -100,8 +96,8 @@ class Bulk:
                 max_miller=max_miller,
             )
         else:
-            # If precomputed_slabs_dir was provided but the specific pkl for the bulk
-            # doesn't exist, save it out after we generate the slabs
+            # If precomputed_slabs_dir was provided but the specific pkl for the
+            # bulk doesn't exist, save it out after we generate the slabs.
             slabs = Slab.from_bulk_get_all_slabs(
                 self, max_miller=max_miller, save_path=precomp_slabs_pkl
             )

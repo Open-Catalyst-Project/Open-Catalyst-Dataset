@@ -1,4 +1,3 @@
-import os
 import pickle
 import warnings
 
@@ -11,11 +10,11 @@ from ocdata.configs.paths import ADSORBATES_PKL_PATH
 class Adsorbate:
     """
     Initializes an adsorbate object in one of 4 ways:
-    - Directly pass in an ase.Atoms object. For this, you should also
-        provide a binding index (see Args).
+    - Directly pass in an ase.Atoms object.
+        For this, you should also provide the index of the binding atom.
     - Pass in index of adsorbate to select from adsorbate database.
     - Pass in the SMILES string of the adsorbate to select from the database.
-    - Randomly sample an adsorbate from adsorbate database.
+    - Randomly sample an adsorbate from the adsorbate database.
 
     Arguments
     ---------
@@ -109,12 +108,13 @@ class Adsorbate:
 def randomly_rotate_adsorbate(
     adsorbate_atoms: ase.Atoms, mode: str = "random", binding_idx: int = None
 ):
+    assert mode in ["random", "heuristic", "random_site_heuristic_placement"]
     atoms = adsorbate_atoms.copy()
     # To sample uniformly random 3D rotations, we first sample a uniformly
     # random rotation about the z-axis. Then, rotate the unmoved north pole to a
     # random position. This also makes it easier to implement the "heuristic"
-    # mode the second step can be changed to sample rotations only within a
-    # certain cone around the north pole.
+    # mode, since the second step can be changed to sample rotations only within
+    # a certain cone around the north pole.
 
     if mode == "random":
         # Rotate uniformly about center of mass along all three directions.
