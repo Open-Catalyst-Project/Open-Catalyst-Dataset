@@ -38,7 +38,7 @@ This broadly has two steps -- identifying a binding site on the surface of the s
 and orienting the adsorbate before placing it at that site. We use custom code inspired by `pymatgen` to do this. There are 3 modes: `heuristic`, `random`, and `random_site_heuristic_placement`.
     - Identifying a binding site: First, a Delaunay meshgrid is constructed with surface atoms as nodes. For `heuristic`, the sites considered are on the node (atop), between 2 nodes (bridge) and in the center of the triangle (hollow). For `random` and `random_site_heuristic_placement`, positions of the sites are uniformly randomly sampled along the Delaunay triangles.
     - Adsorbate orientation: For `heuristic` and `random_site_heuristic_placement`, the adsorbate is uniformly randomly rotated around the `z` direction, and provided a slight wobble around `x` and `y`, which amounts to randomized tilt within a certain cone around the north pole. For `random`, the adsorbate is uniformly randomly rotated about its center of mass along all directions.
-    - Binding index: The adsorbate database includes information about which atoms are expected to bind. For `heuristic` and `random_site_heuristic_placement`, the binding atom of the adsorbate is placed at the site, whereas for `random` the center of mass of the adsorbate is placed at the site.
+    - Binding atom: The adsorbate database includes information about which atoms are expected to bind. For `heuristic` and `random_site_heuristic_placement`, the binding atom of the adsorbate is placed at the site, whereas for `random` the center of mass of the adsorbate is placed at the site.
 
 ![Workflow image](ocdata_workflow.png)
 
@@ -170,8 +170,8 @@ To preview what adsorbates are available, view the corresponding mapping between
 
 ## Previous snapshots of the codebase
 
-- [OC20](https://arxiv.org/abs/2010.09990) was generated with an older version of the bulks and this repository. If you would like to exactly reproduce that work, see `README_legacy_OC20.md`.
-- [OC22](https://arxiv.org/abs/2206.08917) ???
+- [OC20](https://arxiv.org/abs/2010.09990) was generated with an older version of the bulks and this repository. If you would like to exactly reproduce that work, see [`README_legacy_OC20.md`](https://github.com/Open-Catalyst-Project/Open-Catalyst-Dataset/blob/main/README_legacy_OC20.md).
+- [OC22](https://arxiv.org/abs/2206.08917) was generated from the [`OC22_dataset`](https://github.com/Open-Catalyst-Project/Open-Catalyst-Dataset/tree/OC22_dataset/ocdata/oc22_dataset) branch of this repository.
 
 ## Citation
 
@@ -187,4 +187,4 @@ If you use this codebase in your work, please consider citing:
 }
 ```
 
-The Open Catalyst 2020 (OC20) dataset is licensed under a [Creative Commons Attribution 4.0 License](https://creativecommons.org/licenses/by/4.0/legalcode).
+The Open Catalyst 2020 (OC20) and Open Catalyst 2022 (OC22) datasets are licensed under a [Creative Commons Attribution 4.0 License](https://creativecommons.org/licenses/by/4.0/legalcode).
