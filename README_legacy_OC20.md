@@ -1,5 +1,7 @@
 # Open-Catalyst-Dataset
 
+**NOTE**: For the repository to be used as it was for OC20, use a version on or before this commit: [17e350](https://github.com/Open-Catalyst-Project/Open-Catalyst-Dataset/commit/17e350e484cf634f750d8764f376e443cc51b60a).
+
 This may be used as reference to reproduce the input generation workflow used in the Open Catalyst Project OC20 Dataset.
 
 ## Setup
@@ -11,8 +13,6 @@ The easiest way to install prerequisites is via [conda](https://conda.io/docs/in
 * Install specific versions of Pymatgen and ASE: `pip install pymatgen==2020.4.2 ase==3.19.1`
 * Install Catkit from Github: `pip install git+https://github.com/ulissigroup/CatKit.git catkit`
 * Clone this repo and install with: `pip install -e .`
-
-For the repository to be used as it was for OC20, use a version on or before this commit: 17e350e484cf634f750d8764f376e443cc51b60a
 
 ## Workflow
 
