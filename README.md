@@ -123,7 +123,7 @@ python structure_generator.py \
 ```
 
 
-## Databases for bulk, adsorbate and precomputed surfaces
+## Databases for bulks and adsorbates
 
 **Bulks**
 
@@ -133,14 +133,6 @@ A database of bulk materials taken from existing databases (i.e. Materials Proje
 A database of adsorbates may be found in `ocdata/databases/pkls/adsorbates.pkl`. Alternatively, it may be downloaded using the following link:
 The latest version is https://dl.fbaipublicfiles.com/opencatalystproject/data/input_generation/adsorbate_db_2021apr28.pkl (MD5 checksum: `975e00a62c7b634b245102e42167b3fb`).
 To preview what adsorbates are available, view the corresponding mapping between indices and adsorbates (SMILES): https://dl.fbaipublicfiles.com/opencatalystproject/data/input_generation/mapping_adsorbates_2020may12.txt
-
-
-**Precomputed surfaces**
-
-To speed up surface sampling from a chosen bulk material we precomputed surface enumerations up to miller index 2. These can be found here: https://dl.fbaipublicfiles.com/opencatalystproject/data/input_generation/precomputed_surfaces_2021sep20.tar.gz (5.5GB, MD5 checksum: `f56fe10f380d945d46a1bfab136a4834`)
-
-Note that uncompressing this file will result in the folder `precomputed_surfaces_2021june11/`
-(uncompressed size 18GB). It has 11k pickle files, with filename format `<zero-based-index>.pkl`, one for each of the bulk materials based on the bulk indices.
 
 
 **Note**
