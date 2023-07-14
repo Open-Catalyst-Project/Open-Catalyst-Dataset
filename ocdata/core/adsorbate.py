@@ -64,7 +64,7 @@ class Adsorbate:
                 self.binding_indices = adsorbate_binding_indices
         elif adsorbate_id_from_db is not None:
             adsorbate_db = adsorbate_db or pickle.load(open(adsorbate_db_path, "rb"))
-            self._save_adsorbate(adsorbate_db[adsorbate_id_from_db])
+            self._load_adsorbate(adsorbate_db[adsorbate_id_from_db])
         elif adsorbate_smiles_from_db is not None:
             adsorbate_db = adsorbate_db or pickle.load(open(adsorbate_db_path, "rb"))
             adsorbate_obj_tuple = [
@@ -78,7 +78,7 @@ class Adsorbate:
                 )
                 self._get_adsorbate_from_random(adsorbate_db)
             else:
-                self._save_adsorbate(adsorbate_obj_tuple[0][1])
+                self._load_adsorbate(adsorbate_obj_tuple[0][1])
                 self.adsorbate_id_from_db = adsorbate_obj_tuple[0][0]
         else:
             adsorbate_db = adsorbate_db or pickle.load(open(adsorbate_db_path, "rb"))
@@ -98,9 +98,9 @@ class Adsorbate:
 
     def _get_adsorbate_from_random(self, adsorbate_db):
         self.adsorbate_id_from_db = np.random.randint(len(adsorbate_db))
-        self._save_adsorbate(adsorbate_db[self.adsorbate_id_from_db])
+        self._load_adsorbate(adsorbate_db[self.adsorbate_id_from_db])
 
-    def _save_adsorbate(self, adsorbate: Tuple[Any, ...]) -> None:
+    def _load_adsorbate(self, adsorbate: Tuple[Any, ...]) -> None:
         """
         Saves the fields from an adsorbate stored in a database. Fields added
         after the first revision are conditionally added for backwards
