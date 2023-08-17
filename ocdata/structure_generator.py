@@ -118,7 +118,7 @@ class StructureGenerator:
             )
 
         # write files
-        if args.skip_surface_inputs:
+        if not args.skip_surface_inputs:
             write_surface(self.args, self.slab, self.bulk_index, self.surface_index)
         if self.heur_adslabs:
             self._write_adslabs(self.heur_adslabs, "heur")
