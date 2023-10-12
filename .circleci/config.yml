@@ -31,7 +31,8 @@ commands:
               # Install ocp conda env
               source /home/circleci/miniconda/etc/profile.d/conda.sh
               conda activate ocp
-              pip install pymatgen==2023.1.30 ase==3.22.1 black==22.3.0
+              conda install -c conda-forge pymatgen=2023.1.20
+              pip install ase==3.22.1 black==22.3.0
               pip install pytest-cov==4.0.0 pre-commit==2.10.*
             fi
       - save_cache:
