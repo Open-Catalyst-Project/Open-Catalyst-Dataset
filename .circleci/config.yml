@@ -27,7 +27,6 @@ commands:
               # Conda configuration
               conda config --set always_yes yes --set auto_update_conda false
               # Update conda
-              conda update conda
               conda create -n ocp python=3.9
               # Install ocp conda env
               source /home/circleci/miniconda/etc/profile.d/conda.sh
