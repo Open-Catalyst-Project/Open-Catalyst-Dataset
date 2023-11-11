@@ -20,11 +20,19 @@ from ocdata.core.adsorbate import randomly_rotate_adsorbate
 
 
 class MultipleAdsorbateSlabConfig(AdsorbateSlabConfig):
+    """
+    Class to represent a slab with multiple adsorbates on it. This class only
+    returns a single combination of adsorbates placed on the surface. Unlike
+    AdsorbateSlabConfig which enumerates all possible adsorbate placements, this
+    problem gets combinatorially large.
+    """
+
     def __init__(
         self,
         slab: Slab,
         adsorbates: List[Adsorbate],
         num_sites: int = 100,
+        num_configurations: int = 1,
         interstitial_gap: float = 0.1,
         mode: str = "random_site_heuristic_placement",
     ):
@@ -40,6 +48,7 @@ class MultipleAdsorbateSlabConfig(AdsorbateSlabConfig):
         self.sites = self.get_binding_sites(num_sites)
         self.atoms, self.metadata_list = self.place_adsorbates_on_sites(
             self.sites,
+            num_configurations,
             interstitial_gap,
         )
 
@@ -111,6 +120,7 @@ class MultipleAdsorbateSlabConfig(AdsorbateSlabConfig):
     def place_adsorbates_on_sites(
         self,
         sites: list,
+        num_configurations: int = 1,
         interstitial_gap: float = 0.1,
     ):
         """
@@ -123,72 +133,82 @@ class MultipleAdsorbateSlabConfig(AdsorbateSlabConfig):
         )
         num_sites = len(sites)
 
-        ### Create metadata list
+        atoms_list = []
         metadata_list = []
+        for _ in range(num_configurations):
+            metadata = []
 
-        ### Build mapping to store distance of site to nearest adsorbate.
-        ### Initialize to an arbitrarily large number to represent no adsorbates placed.
-        distance_to_nearest_adsorbate_map = 1e10 * np.ones(num_sites)
+            ### Build mapping to store distance of site to nearest adsorbate.
+            ### Initialize to an arbitrarily large number to represent no adsorbates placed.
+            distance_to_nearest_adsorbate_map = 1e10 * np.ones(num_sites)
 
-        ### Randomly select a site to place the first adsorbate
-        site_idx = np.random.choice(num_sites)
-        site = sites[site_idx]
-
-        initial_adsorbate = self.adsorbates[0]
-
-        ### Place adsorbate on site
-        base_atoms, sampled_angles = self.place_adsorbate_on_site(
-            initial_adsorbate, site, interstitial_gap
-        )
-
-        metadata_list.append(
-            {"adsorbate": initial_adsorbate, "site": site, "xyz_angles": sampled_angles}
-        )
-
-        ### For the initial adsorbate, update the distance mapping based
-        distance_to_nearest_adsorbate_map = update_distance_map(
-            distance_to_nearest_adsorbate_map,
-            site_idx,
-            initial_adsorbate,
-            pseudo_atoms,
-        )
-
-        for idx, adsorbate in enumerate(self.adsorbates[1:]):
-            binding_idx = adsorbate.binding_indices[0]
-            binding_atom = adsorbate.atoms.get_atomic_numbers()[binding_idx]
-            covalent_radius = covalent_radii[binding_atom]
-
-            ### A site is allowed if the distance to the next closest adsorbate is
-            ### at least the interstitial_gap + covalent radius of the binding atom away.
-            ### The covalent radius of the nearest adsorbate is already considered in the
-            ### distance mapping.
-            mask = (
-                distance_to_nearest_adsorbate_map >= interstitial_gap + covalent_radius
-            ).nonzero()[0]
-
-            site_idx = np.random.choice(mask)
+            ### Randomly select a site to place the first adsorbate
+            site_idx = np.random.choice(num_sites)
             site = sites[site_idx]
 
-            atoms, sampled_angles = self.place_adsorbate_on_site(
-                adsorbate, site, interstitial_gap
+            initial_adsorbate = self.adsorbates[0]
+
+            ### Place adsorbate on site
+            base_atoms, sampled_angles = self.place_adsorbate_on_site(
+                initial_adsorbate, site, interstitial_gap
             )
 
-            ### Slabs are not altered in the adsorbat placement step
-            ### We can add the adsorbate directly to the base atoms
-            base_atoms += atoms[atoms.get_tags() == 2]
+            metadata.append(
+                {
+                    "adsorbate": initial_adsorbate,
+                    "site": site,
+                    "xyz_angles": sampled_angles,
+                }
+            )
 
+            ### For the initial adsorbate, update the distance mapping based
             distance_to_nearest_adsorbate_map = update_distance_map(
                 distance_to_nearest_adsorbate_map,
                 site_idx,
-                adsorbate,
+                initial_adsorbate,
                 pseudo_atoms,
             )
 
-            metadata_list.append(
-                {"adsorbate": adsorbate, "site": site, "xyz_angles": sampled_angles}
-            )
+            for idx, adsorbate in enumerate(self.adsorbates[1:]):
+                binding_idx = adsorbate.binding_indices[0]
+                binding_atom = adsorbate.atoms.get_atomic_numbers()[binding_idx]
+                covalent_radius = covalent_radii[binding_atom]
 
-        return base_atoms, metadata_list
+                ### A site is allowed if the distance to the next closest adsorbate is
+                ### at least the interstitial_gap + covalent radius of the binding atom away.
+                ### The covalent radius of the nearest adsorbate is already considered in the
+                ### distance mapping.
+                mask = (
+                    distance_to_nearest_adsorbate_map
+                    >= interstitial_gap + covalent_radius
+                ).nonzero()[0]
+
+                site_idx = np.random.choice(mask)
+                site = sites[site_idx]
+
+                atoms, sampled_angles = self.place_adsorbate_on_site(
+                    adsorbate, site, interstitial_gap
+                )
+
+                ### Slabs are not altered in the adsorbat placement step
+                ### We can add the adsorbate directly to the base atoms
+                base_atoms += atoms[atoms.get_tags() == 2]
+
+                distance_to_nearest_adsorbate_map = update_distance_map(
+                    distance_to_nearest_adsorbate_map,
+                    site_idx,
+                    adsorbate,
+                    pseudo_atoms,
+                )
+
+                metadata.append(
+                    {"adsorbate": adsorbate, "site": site, "xyz_angles": sampled_angles}
+                )
+
+            atoms_list.append(base_atoms)
+            metadata_list.append(metadata)
+
+        return atoms_list, metadata_list
 
 
 def update_distance_map(prev_distance_map, site_idx, adsorbate, pseudo_atoms):
