@@ -22,7 +22,7 @@ from ocdata.core.adsorbate import randomly_rotate_adsorbate
 class MultipleAdsorbateSlabConfig(AdsorbateSlabConfig):
     """
     Class to represent a slab with multiple adsorbates on it. This class only
-    returns a single combination of adsorbates placed on the surface. Unlike
+    returns a fixed combination of adsorbates placed on the surface. Unlike
     AdsorbateSlabConfig which enumerates all possible adsorbate placements, this
     problem gets combinatorially large.
     """
