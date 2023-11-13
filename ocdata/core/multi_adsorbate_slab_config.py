@@ -46,7 +46,7 @@ class MultipleAdsorbateSlabConfig(AdsorbateSlabConfig):
         self.mode = mode
 
         self.sites = self.get_binding_sites(num_sites)
-        self.atoms, self.metadata_list = self.place_adsorbates_on_sites(
+        self.atoms_list, self.metadata_list = self.place_adsorbates_on_sites(
             self.sites,
             num_configurations,
             interstitial_gap,
@@ -125,6 +125,13 @@ class MultipleAdsorbateSlabConfig(AdsorbateSlabConfig):
     ):
         """
         Place the adsorbate at the given binding sites.
+
+        This method generates a fixed number of configurations where sites are
+        selected to ensure that adsorbate binding indices are at least a fair
+        distance away from each other (covalent radii + interstitial gap).
+        While this helps prevent adsorbate overlap it does not gaurantee it
+        since non-binding adsorbate atoms can overlap if the right combination
+        of angles is sampled.
         """
         # Build a fake atoms object with the positions as the sites.
         # This allows us to easily compute distances while accounting for perodicity.
@@ -135,6 +142,7 @@ class MultipleAdsorbateSlabConfig(AdsorbateSlabConfig):
 
         atoms_list = []
         metadata_list = []
+        ### NOTE: We can hard enforce these configurations to be non-overlapping.
         for _ in range(num_configurations):
             metadata = []
 
@@ -152,12 +160,15 @@ class MultipleAdsorbateSlabConfig(AdsorbateSlabConfig):
             base_atoms, sampled_angles = self.place_adsorbate_on_site(
                 initial_adsorbate, site, interstitial_gap
             )
+            ### Keep track of adsorbate indices
+            adsorbate_indices = (base_atoms.get_tags() == 2).nonzero()[0]
 
             metadata.append(
                 {
                     "adsorbate": initial_adsorbate,
                     "site": site,
                     "xyz_angles": sampled_angles,
+                    "adsorbate_indices": adsorbate_indices,
                 }
             )
 
@@ -192,6 +203,9 @@ class MultipleAdsorbateSlabConfig(AdsorbateSlabConfig):
 
                 ### Slabs are not altered in the adsorbat placement step
                 ### We can add the adsorbate directly to the base atoms
+                adsorbate_indices = np.arange(
+                    len(base_atoms), len(base_atoms) + len(adsorbate.atoms)
+                )
                 base_atoms += atoms[atoms.get_tags() == 2]
 
                 distance_to_nearest_adsorbate_map = update_distance_map(
@@ -202,7 +216,12 @@ class MultipleAdsorbateSlabConfig(AdsorbateSlabConfig):
                 )
 
                 metadata.append(
-                    {"adsorbate": adsorbate, "site": site, "xyz_angles": sampled_angles}
+                    {
+                        "adsorbate": adsorbate,
+                        "site": site,
+                        "xyz_angles": sampled_angles,
+                        "adsorbate_indices": adsorbate_indices,
+                    }
                 )
 
             atoms_list.append(base_atoms)
