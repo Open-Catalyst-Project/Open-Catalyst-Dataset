@@ -134,7 +134,7 @@ class MultipleAdsorbateSlabConfig(AdsorbateSlabConfig):
         of angles is sampled.
         """
         # Build a fake atoms object with the positions as the sites.
-        # This allows us to easily compute distances while accounting for perodicity.
+        # This allows us to easily compute distances while accounting for periodicity.
         pseudo_atoms = Atoms(
             [1] * len(sites), positions=sites, cell=self.slab.atoms.get_cell(), pbc=True
         )
