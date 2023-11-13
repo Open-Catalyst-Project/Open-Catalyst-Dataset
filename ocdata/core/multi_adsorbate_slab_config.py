@@ -229,6 +229,22 @@ class MultipleAdsorbateSlabConfig(AdsorbateSlabConfig):
 
         return atoms_list, metadata_list
 
+    def get_metadata_dict(self, ind):
+        """
+        Returns a dict containing the atoms object and metadata for
+        one specified config, used for writing to files.
+        """
+        return {
+            "adsorbed_slab_atomsobject": self.atoms_list[ind],
+            "adsorbed_slab_metadata": {
+                "bulk_id": self.slab.bulk.src_id,
+                "millers": self.slab.millers,
+                "shift": self.slab.shift,
+                "top": self.slab.top,
+                "adsorbates": self.metadata_list[ind],
+            },
+        }
+
 
 def update_distance_map(prev_distance_map, site_idx, adsorbate, pseudo_atoms):
     """
