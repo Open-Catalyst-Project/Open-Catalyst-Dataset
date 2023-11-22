@@ -1,22 +1,10 @@
-import copy
-import logging
-import random
-import warnings
-from itertools import product
 from typing import List
 
-import ase
 import numpy as np
-import scipy
 from ase import Atoms
-from ase.data import atomic_numbers, covalent_radii
-from ase.geometry import wrap_positions
-from pymatgen.analysis.adsorption import AdsorbateSiteFinder
-from pymatgen.io.ase import AseAtomsAdaptor
-from scipy.optimize import fsolve
+from ase.data import covalent_radii
 
 from ocdata.core import Adsorbate, AdsorbateSlabConfig, Slab
-from ocdata.core.adsorbate import randomly_rotate_adsorbate
 
 
 class MultipleAdsorbateSlabConfig(AdsorbateSlabConfig):
