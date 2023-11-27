@@ -30,28 +30,28 @@ class MultipleAdsorbateSlabConfig(AdsorbateSlabConfig):
         Minimum distance, in Angstroms, between adsorbate and slab atoms as
         well as the inter-adsorbate distance.
     mode: str
-                "random", "heuristic", or "random_site_heuristic_placement".
-                This affects surface site sampling and adsorbate placement on each site.
+        "random", "heuristic", or "random_site_heuristic_placement".
+        This affects surface site sampling and adsorbate placement on each site.
 
-                In "random", we do a Delaunay triangulation of the surface atoms, then
-                sample sites uniformly at random within each triangle. When placing the
-                adsorbate, we randomly rotate it along xyz, and place it such that the
-                center of mass is at the site.
+        In "random", we do a Delaunay triangulation of the surface atoms, then
+        sample sites uniformly at random within each triangle. When placing the
+        adsorbate, we randomly rotate it along xyz, and place it such that the
+        center of mass is at the site.
 
-                In "heuristic", we use Pymatgen's AdsorbateSiteFinder to find the most
-                energetically favorable sites, i.e., ontop, bridge, or hollow sites.
-                When placing the adsorbate, we randomly rotate it along z with only
-                slight rotation along x and y, and place it such that the binding atom
-                is at the site.
+        In "heuristic", we use Pymatgen's AdsorbateSiteFinder to find the most
+        energetically favorable sites, i.e., ontop, bridge, or hollow sites.
+        When placing the adsorbate, we randomly rotate it along z with only
+        slight rotation along x and y, and place it such that the binding atom
+        is at the site.
 
-                In "random_site_heuristic_placement", we do a Delaunay triangulation of
-                the surface atoms, then sample sites uniformly at random within each
-                triangle. When placing the adsorbate, we randomly rotate it along z with
-                only slight rotation along x and y, and place it such that the binding
-                atom is at the site.
+        In "random_site_heuristic_placement", we do a Delaunay triangulation of
+        the surface atoms, then sample sites uniformly at random within each
+        triangle. When placing the adsorbate, we randomly rotate it along z with
+        only slight rotation along x and y, and place it such that the binding
+        atom is at the site.
 
-                In all cases, the adsorbate is placed at the closest position of no
-                overlap with the slab plus `interstitial_gap` along the surface normal.
+        In all cases, the adsorbate is placed at the closest position of no
+        overlap with the slab plus `interstitial_gap` along the surface normal.
     """
 
     def __init__(
