@@ -13,6 +13,45 @@ class MultipleAdsorbateSlabConfig(AdsorbateSlabConfig):
     returns a fixed combination of adsorbates placed on the surface. Unlike
     AdsorbateSlabConfig which enumerates all possible adsorbate placements, this
     problem gets combinatorially large.
+
+    Arguments
+    ---------
+    slab: Slab
+        Slab object.
+    adsorbates: List[Adsorbate]
+        List of adsorbate objects to place on the slab.
+    num_sites: int
+        Number of sites to sample.
+    num_configurations: int
+        Number of configurations to generate per slab+adsorbate(s) combination.
+        This corresponds to selecting different site combinations to place
+        the adsorbates on.
+    interstitial_gap: float
+        Minimum distance, in Angstroms, between adsorbate and slab atoms as
+        well as the inter-adsorbate distance.
+    mode: str
+                "random", "heuristic", or "random_site_heuristic_placement".
+                This affects surface site sampling and adsorbate placement on each site.
+
+                In "random", we do a Delaunay triangulation of the surface atoms, then
+                sample sites uniformly at random within each triangle. When placing the
+                adsorbate, we randomly rotate it along xyz, and place it such that the
+                center of mass is at the site.
+
+                In "heuristic", we use Pymatgen's AdsorbateSiteFinder to find the most
+                energetically favorable sites, i.e., ontop, bridge, or hollow sites.
+                When placing the adsorbate, we randomly rotate it along z with only
+                slight rotation along x and y, and place it such that the binding atom
+                is at the site.
+
+                In "random_site_heuristic_placement", we do a Delaunay triangulation of
+                the surface atoms, then sample sites uniformly at random within each
+                triangle. When placing the adsorbate, we randomly rotate it along z with
+                only slight rotation along x and y, and place it such that the binding
+                atom is at the site.
+
+                In all cases, the adsorbate is placed at the closest position of no
+                overlap with the slab plus `interstitial_gap` along the surface normal.
     """
 
     def __init__(
@@ -65,25 +104,25 @@ class MultipleAdsorbateSlabConfig(AdsorbateSlabConfig):
 
         atoms_list = []
         metadata_list = []
-        ### NOTE: We can hard enforce these configurations to be non-overlapping.
+        # NOTE: We can hard enforce these configurations to be non-overlapping.
         for _ in range(num_configurations):
             metadata = []
 
-            ### Build mapping to store distance of site to nearest adsorbate.
-            ### Initialize to an arbitrarily large number to represent no adsorbates placed.
+            # Build mapping to store distance of site to nearest adsorbate.
+            # Initialize to an arbitrarily large number to represent no adsorbates placed.
             distance_to_nearest_adsorbate_map = 1e10 * np.ones(num_sites)
 
-            ### Randomly select a site to place the first adsorbate
+            # Randomly select a site to place the first adsorbate
             site_idx = np.random.choice(num_sites)
             site = sites[site_idx]
 
             initial_adsorbate = self.adsorbates[0]
 
-            ### Place adsorbate on site
+            # Place adsorbate on site
             base_atoms, sampled_angles = self.place_adsorbate_on_site(
                 initial_adsorbate, site, interstitial_gap
             )
-            ### Keep track of adsorbate indices
+            # Keep track of adsorbate indices
             adsorbate_indices = (base_atoms.get_tags() == 2).nonzero()[0]
 
             metadata.append(
@@ -95,7 +134,7 @@ class MultipleAdsorbateSlabConfig(AdsorbateSlabConfig):
                 }
             )
 
-            ### For the initial adsorbate, update the distance mapping based
+            # For the initial adsorbate, update the distance mapping based
             distance_to_nearest_adsorbate_map = update_distance_map(
                 distance_to_nearest_adsorbate_map,
                 site_idx,
@@ -108,10 +147,10 @@ class MultipleAdsorbateSlabConfig(AdsorbateSlabConfig):
                 binding_atom = adsorbate.atoms.get_atomic_numbers()[binding_idx]
                 covalent_radius = covalent_radii[binding_atom]
 
-                ### A site is allowed if the distance to the next closest adsorbate is
-                ### at least the interstitial_gap + covalent radius of the binding atom away.
-                ### The covalent radius of the nearest adsorbate is already considered in the
-                ### distance mapping.
+                # A site is allowed if the distance to the next closest adsorbate is
+                # at least the interstitial_gap + covalent radius of the binding atom away.
+                # The covalent radius of the nearest adsorbate is already considered in the
+                # distance mapping.
                 mask = (
                     distance_to_nearest_adsorbate_map
                     >= interstitial_gap + covalent_radius
@@ -124,8 +163,8 @@ class MultipleAdsorbateSlabConfig(AdsorbateSlabConfig):
                     adsorbate, site, interstitial_gap
                 )
 
-                ### Slabs are not altered in the adsorbat placement step
-                ### We can add the adsorbate directly to the base atoms
+                # Slabs are not altered in the adsorbat placement step
+                # We can add the adsorbate directly to the base atoms
                 adsorbate_indices = np.arange(
                     len(base_atoms), len(base_atoms) + len(adsorbate.atoms)
                 )
@@ -185,8 +224,8 @@ def update_distance_map(prev_distance_map, site_idx, adsorbate, pseudo_atoms):
         - covalent_radius
     )
 
-    ### update previous distance mapping by taking the minimum per-element distance between
-    ### the new distance mapping for the placed site and the previous mapping.
+    # update previous distance mapping by taking the minimum per-element distance between
+    # the new distance mapping for the placed site and the previous mapping.
     updated_distance_map = np.minimum(prev_distance_map, new_site_distances)
 
     return updated_distance_map
