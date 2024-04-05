@@ -5,8 +5,8 @@ BASE_FLAGS = {
     "xc": "PBE",
     "ivdw": 11,
     "encut": 400.0,
-    "ediff": 1e-4,
-    "nelm": 200,
+    "ediff": 1e-6,
+    "nelm": 100,
     "ismear": 0,
     "sigma": 0.1,
     "lwave": False,
@@ -19,6 +19,7 @@ BASE_FLAGS = {
     "lasph": True,
     "lreal": "Auto",
     "ncore": 4,
+    "dipol": [0.5, 0.5, 0.5],
 }
 
 OPT_FLAGS = {"ibrion": 2, "nsw": 0}
@@ -30,3 +31,5 @@ MD_FLAGS = {
     "tebeg": 300,
     "potim": 1,
 }
+
+ML_FLAGS = {"ML_LMLFF": True, "ML_MODE": "train", "ML_EPS_LOW": 1e-7}
