@@ -98,7 +98,7 @@ def pack_water(atoms=None, nummol=None, volume=None, density=1.0,
 
         # Run packmol input script
         try:
-            ps = subprocess.Popen("/p/lustre2/nitgo/packages/packmol-20.14.3/packmol < input.inp", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            ps = subprocess.Popen("./packmol < input.inp", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             out, err = ps.communicate()
         except:
             raise OSError("packmol is not found. For installation instructions, \
