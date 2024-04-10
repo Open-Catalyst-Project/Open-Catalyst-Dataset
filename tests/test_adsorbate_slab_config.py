@@ -8,7 +8,7 @@ from pymatgen.io.ase import AseAtomsAdaptor
 
 from ocdata.core import Adsorbate, AdsorbateSlabConfig, Bulk, Slab
 from ocdata.core.adsorbate_slab_config import get_interstitial_distances
-from ocdata.databaes.pkls import ADSORBATES_PKL_PATH, BULK_PKL_PATH
+from ocdata.databases.pkls import ADSORBATES_PKL_PATH, BULK_PKL_PATH
 
 
 @pytest.fixture(scope="class")
