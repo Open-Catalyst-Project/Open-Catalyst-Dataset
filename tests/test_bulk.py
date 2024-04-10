@@ -75,7 +75,7 @@ class TestBulk:
             seen.append(slab)
 
         # pymatgen-2023.5.10 + ase 3.22.1
-        assert len(slabs) == 14
+        assert len(slabs) == 15
 
         with open(self.precomputed_path, "wb") as f:
             pickle.dump(slabs, f)
@@ -87,7 +87,7 @@ class TestBulk:
             precomputed_slabs_dir=precomputed_slabs_dir
         )
         # pymatgen-2023.5.10 + ase 3.22.1
-        assert len(precomputed_slabs) == 14
+        assert len(precomputed_slabs) == 15
 
         slabs = self.bulk.get_slabs()
         assert precomputed_slabs[0] == slabs[0]

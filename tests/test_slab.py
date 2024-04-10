@@ -32,4 +32,4 @@ class TestSlab:
 
         assert slab.atoms.get_chemical_formula() == "Sn48"
         assert slab.millers == (2, 1, 0)
-        assert slab.shift == 0.0833333333333334
+        assert np.isclose(slab.shift, 0.0833333333333334)
