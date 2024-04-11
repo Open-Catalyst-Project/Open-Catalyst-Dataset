@@ -57,7 +57,7 @@ jobs:
       - image: cimg/python:3.9.13
     resource_class: large
     steps:
-      - install_deps_ubuntu
+      - install_deps_ubuntu 
       - run:
           name: install ocdata and run tests
           command: |
