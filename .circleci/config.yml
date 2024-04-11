@@ -53,7 +53,7 @@ jobs:
           command: black . --check
 
   test_ubuntu:
-    docker:
+    docker: 
       - image: cimg/python:3.9.13
     resource_class: large
     steps:
