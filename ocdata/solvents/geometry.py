@@ -1,7 +1,8 @@
 import numpy as np
 from ase import Atom
-from noise import snoise2, pnoise2
-from noise_randomized import snoise2 as snoise2r, randomize
+from perlin_noise import PerlinNoise
+#from noise import snoise2, pnoise2
+#from noise_randomized import snoise2 as snoise2r, randomize
 import warnings
 
 
@@ -101,9 +102,9 @@ class Geometry:
         n2 = np.cross(c, a)
         n3 = np.cross(b, c)
 
-        # n1 = n1/np.dot(n1, n1)
-        # n2 = n2/np.dot(n2, n2)
-        # n3 = n3/np.dot(n3, n3)
+        n1 = n1/np.dot(n1, n1)
+        n2 = n2/np.dot(n2, n2)
+        n3 = n3/np.dot(n3, n3)
 
         origin = np.array([0, 0, 0]) + pbc / 2
         top = (a + b + c) - pbc / 2
@@ -115,7 +116,7 @@ class Geometry:
         plane5 = Geometry.vec_and_point_to_plane(-n2, top)
         plane6 = Geometry.vec_and_point_to_plane(-n3, top)
 
-        return [plane1, plane2, plane3, plane4, plane5, plane6]
+        return [plane1, plane2, plane3,plane4,plane5,plane6]
 
     @staticmethod
     def extract_box_properties(center, length, lo_corner, hi_corner):
@@ -164,7 +165,8 @@ class Geometry:
         :returns: string with information about the structure
         :rtype: str
         """
-        structure = "structure water.pdb\n"
+        structure = ""
+        structure += "structure solvent.pdb\n"
         structure += f"  number {number}\n"
         structure += f"  {side} {self.__repr__()} "
         for param in self.params:
@@ -193,11 +195,13 @@ class PlaneBoundTriclinicGeometry(Geometry):
     def packmol_structure(self, number, side):
         """Make structure to be used in PACKMOL input script
         """
+        structure = ""
+
         if side == "inside":
             side = "over"
         elif side == "outside":
             side = "below"
-        structure = "structure water.pdb\n"
+        structure += f"structure solvent.pdb\n"
         structure += f"  number {number}\n"
         for plane in self.planes:
             structure += f"  {side} plane "
@@ -403,7 +407,7 @@ class PlaneGeometry(Geometry):
 
         ds = np.einsum('ij,ij->j', self.point, self.normal)
 
-        structure = "structure water.pdb\n"
+        structure = "structure solvent.pdb\n"
         structure += f"  number {number}\n"
         for plane in range(len(self.normal)):
             a, b, c = self.normal[side]
@@ -812,11 +816,13 @@ class ProceduralSurfaceGridGeometry(Geometry):
                 "Seed 0 and 1 produces the same noise")
 
         # Randomize permutation matrix for Simplex noise
-        randomize(seed=seed, period=period)
-
+        #randomize(seed=seed, period=period)
+        np.random.seed(seed)
+        noise = PerlinNoise(octaves=period)
+        
         normal = np.atleast_2d(normal)
         self.normal = normal / np.linalg.norm(normal, axis=1)
-        self.noise = snoise2r
+        self.noise = noise
         self.scale = scale
         self.threshold = threshold
         self.n1, self.n2 = grid

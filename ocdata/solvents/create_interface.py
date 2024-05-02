@@ -16,7 +16,7 @@ from ase.build import add_adsorbate
 "function adapted from https://github.com/henriasv/molecular-builder/tree/master"
 
 
-def pack_water(atoms=None, nummol=None, volume=None, density=1.0,
+def pack_solvent(atoms=None,solvent=None, nummol=None, volume=None, density=None,
                geometry=None, side='in', pbc=0.0, tolerance=2.0):
     """Pack water molecules into voids at a given volume defined by a geometry.
     The packing is performed by packmol.
@@ -40,14 +40,34 @@ def pack_water(atoms=None, nummol=None, volume=None, density=1.0,
 
     :returns: Coordinates of the packed water
     """
+    def get_molecules_per_volume(density, molar_mass):
+        """
+        Given a molecular density (g/ml) and molar mass (g/mol), return the number
+        of molecules necessary per cubic angstrom to preserve the density.
+
+        Arguments:
+            density: float
+                Molecular density of molecule, in g/mL
+            molar_mass: float
+                Molar mass of molecule, in g/mol
+
+        Outputs:
+            # molecules per unit volume
+        """
+        return (6.022e23) * density / (1e24 * molar_mass)
+        
     if (volume is None and nummol is None):
         raise ValueError("Either volume or the number of molecules needed")
     elif (volume is not None) and (nummol is not None):
         raise ValueError("Either volume or the number of molecules needed")
 
     if volume is not None:
-        V_per_water = 29.9796/density
-        nummol = int(volume/V_per_water)
+
+        MMsolv = sum(solvent.get_masses())
+        numol_p_V = get_molecules_per_volume(density,MMsolv)
+        nummol = volume*numol_p_V
+        nummol = int(np.round(nummol))
+
 
     format_s, format_v = "pdb", "proteindatabank"
     side += "side"
@@ -80,9 +100,11 @@ def pack_water(atoms=None, nummol=None, volume=None, density=1.0,
             atoms.write(f"atoms.{format_s}", format=format_v)
 
         # Copy water.pdb to temporary directory
-        this_dir, this_filename = os.path.split(__file__)
-        water_data = this_dir + f"/data_files/water.{format_s}"
-        copyfile(water_data, f"water.{format_s}")
+        if solvent is not None and len(solvent) > 0:
+            solvent.write(f"solvent.{format_s}", format=format_v)
+        #this_dir, this_filename = os.path.split(__file__)
+        #water_data = this_dir + f"/data_files/hexane1.{format_s}"
+        #copyfile(water_data, f"solvent.{format_s}")
 
         # Generate packmol input script
         with open("input.inp", "w") as f:
@@ -98,7 +120,7 @@ def pack_water(atoms=None, nummol=None, volume=None, density=1.0,
 
         # Run packmol input script
         try:
-            ps = subprocess.Popen("./packmol < input.inp", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            ps = subprocess.Popen("/home/mmarasch/packmol-20.14.4/packmol < input.inp", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             out, err = ps.communicate()
         except:
             raise OSError("packmol is not found. For installation instructions, \
@@ -116,7 +138,7 @@ def pack_water(atoms=None, nummol=None, volume=None, density=1.0,
     if atoms is None:
         water.set_cell(cell)
     else:
-        # remove solid
+        #remove solid
         if len(atoms) > 0:
             del water[:len(atoms)]
         water.set_cell(cell)
@@ -127,40 +149,42 @@ def pack_water(atoms=None, nummol=None, volume=None, density=1.0,
 
 
 if __name__ == "__main__":
+    import numpy as np
+# An exemple for hexane
+    bulk = Bulk()
 
-   bulk = Bulk()
+    slab = Slab.from_bulk_get_random_slab(bulk, max_miller=2, min_ab=8)
+    adsorbate = Adsorbate()
+    atoms  = AdsorbateSlabConfig(slab, adsorbate, mode="random", num_sites=1)
+    atoms =atoms.atoms_list[0]
+    cell = atoms.get_cell()
 
-   slab = Slab.from_bulk_get_random_slab(bulk, max_miller=2, min_ab=8)
+    symbol = atoms.get_chemical_formula()
 
-   atoms  = slab.atoms
+    solv = read('./data_files/hexanes.traj',":")
+    solvent = solv[0]
+    symbol_solv = solvent.get_chemical_formula()
+    sovent_box_cell = solvent
+    z = 8
+    adsorbate =adsorbate.atoms
+    adsorbate.set_cell([cell[0],cell[1],[0.,0.,z]])
 
-   cell = atoms.get_cell()
+    solvent_box_cell = pack_solvent(volume=adsorbate.get_volume(),atoms=adsorbate,solvent=solvent,density=0.66)
+    print(1.66054*np.sum(solvent_box_cell.get_masses())/solvent_box_cell.get_volume())
+    a = atoms.positions[:, 2].argmax()
+    height = 3.0
 
-   symbol = atoms.get_chemical_formula()
+    max_z = atoms.positions[a, 2] + height
 
-   water_box_cell = read('./data_files/water.pdb')
+    solvent_box_cell.translate([0,0,max_z])
 
-   z = 8.0
+    interface = atoms + solvent_box_cell
 
-   water_box_cell.set_cell([cell[0],cell[1],[0.,0.,z]])
+    interface.center(vacuum=15, axis=2) 
 
-   water_box_cell = pack_water(volume=water_box_cell.get_volume(),atoms=water_box_cell)
-
-   a = atoms.positions[:, 2].argmax()
-
-   height = 3.0
-
-   max_z = atoms.positions[a, 2] + height
-
-   water_box_cell.translate([0,0,max_z])
-
-   interface = atoms + water_box_cell
-
-   interface.center(vacuum=15, axis=2) 
-
-   interface.wrap()
-
-   interface.write('{0}-interface.POSCAR'.format(symbol))
+    interface.wrap()
+    print('{0}-interface-{1}.POSCAR'.format(symbol,symbol_solv))
+    interface.write('{0}-interface-{1}.POSCAR'.format(symbol,symbol_solv))
 
 
     
