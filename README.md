@@ -1,3 +1,5 @@
+# THIS REPOSITORY HAS BEEN MOVED TO [http://github.com/fair-chem/fairchem/tree/main/src/fairchem/data/oc](http://github.com/fair-chem/fairchem/tree/main/src/fairchem/data/oc) 
+
 [![CircleCI](https://dl.circleci.com/status-badge/img/gh/Open-Catalyst-Project/Open-Catalyst-Dataset/tree/main.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/Open-Catalyst-Project/Open-Catalyst-Dataset/tree/main)
 [![codecov](https://codecov.io/gh/Open-Catalyst-Project/Open-Catalyst-Dataset/branch/main/graph/badge.svg?token=IZ7J729L6S)](https://codecov.io/gh/Open-Catalyst-Project/Open-Catalyst-Dataset/tree/main)
 
