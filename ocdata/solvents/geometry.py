@@ -174,6 +174,30 @@ class Geometry:
         structure += "\nend structure\n"
         return structure
 
+    def packmol_structure_ions(self, number_cation,number_anion, side):
+        """Make structure to be used in PACKMOL input script
+
+        :param number: number of water molecules
+        :type number: int
+        :param side: pack water inside/outside of geometry
+        :type side: str
+        :returns: string with information about the structure
+        :rtype: str
+        """
+        structure = ""
+        structure += "structure cation.pdb\n"
+        structure += f"  number {number_cation}\n"
+        structure += f"  {side} {self.__repr__()} "
+        for param in self.params:
+            structure += f"{param} "
+        structure += "\n"
+        structure += "structure anion.pdb\n"
+        structure += f"  number {number}\n"
+        structure += f"  {side} {self.__repr__()} "
+        for param in self.params:
+            structure += f"{param} "
+        structure += "\nend structure\n"
+        return structure
 
 class PlaneBoundTriclinicGeometry(Geometry):
     """Triclinic crystal geometry based on ase.Atom cell
@@ -203,6 +227,37 @@ class PlaneBoundTriclinicGeometry(Geometry):
             side = "below"
         structure += f"structure solvent.pdb\n"
         structure += f"  number {number}\n"
+        for plane in self.planes:
+            structure += f"  {side} plane "
+            for param in plane:
+                structure += f"{param} "
+            structure += "\n"
+        structure += "end structure\n"
+        return structure
+
+    def packmol_structure_ions(self, number_cation,number_anion, side):
+        """Make structure to be used in PACKMOL input script
+        """
+        structure = ""
+
+        if side == "inside":
+            side = "over"
+        elif side == "outside":
+            side = "below"
+        structure += f"structure cation.pdb\n"
+        structure += f"  number {number_cation}\n"
+        for plane in self.planes:
+            structure += f"  {side} plane "
+            for param in plane:
+                structure += f"{param} "
+            structure += "\n"
+        structure += "end structure\n"
+        if side == "inside":
+            side = "over"
+        elif side == "outside":
+            side = "below"
+        structure += f"structure anion.pdb\n"
+        structure += f"  number {number_anion}\n"
         for plane in self.planes:
             structure += f"  {side} plane "
             for param in plane:
