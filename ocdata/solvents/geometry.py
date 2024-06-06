@@ -158,9 +158,9 @@ class Geometry:
     def packmol_structure(self, number, side):
         """Make structure to be used in PACKMOL input script
 
-        :param number: number of water molecules
+        :param number: number of solvent molecules
         :type number: int
-        :param side: pack water inside/outside of geometry
+        :param side: pack solvent inside/outside of geometry
         :type side: str
         :returns: string with information about the structure
         :rtype: str
@@ -174,30 +174,26 @@ class Geometry:
         structure += "\nend structure\n"
         return structure
 
-    def packmol_structure_ions(self, number_cation,number_anion, side):
+    def packmol_structure_ions(self, numbers, side):
         """Make structure to be used in PACKMOL input script
 
-        :param number: number of water molecules
+        :param number: number of solvent molecules
         :type number: int
-        :param side: pack water inside/outside of geometry
+        :param side: pack solvent inside/outside of geometry
         :type side: str
         :returns: string with information about the structure
         :rtype: str
         """
         structure = ""
-        structure += "structure cation.pdb\n"
-        structure += f"  number {number_cation}\n"
-        structure += f"  {side} {self.__repr__()} "
-        for param in self.params:
-            structure += f"{param} "
-        structure += "\n"
-        structure += "structure anion.pdb\n"
-        structure += f"  number {number}\n"
-        structure += f"  {side} {self.__repr__()} "
-        for param in self.params:
-            structure += f"{param} "
-        structure += "\nend structure\n"
-        return structure
+        for i,number in enumerate(numbers):
+            structure += "structure ion_{i}.pdb\n"
+            structure += f"  number {number}\n"
+            structure += f"  {side} {self.__repr__()} "
+            for param in self.params:
+                structure += f"{param} "
+            structure += "\nend structure\n"
+            return structure
+
 
 class PlaneBoundTriclinicGeometry(Geometry):
     """Triclinic crystal geometry based on ase.Atom cell
@@ -235,35 +231,23 @@ class PlaneBoundTriclinicGeometry(Geometry):
         structure += "end structure\n"
         return structure
 
-    def packmol_structure_ions(self, number_cation,number_anion, side):
+    def packmol_structure_ions(self, numbers, side):
         """Make structure to be used in PACKMOL input script
         """
         structure = ""
-
-        if side == "inside":
-            side = "over"
-        elif side == "outside":
-            side = "below"
-        structure += f"structure cation.pdb\n"
-        structure += f"  number {number_cation}\n"
-        for plane in self.planes:
-            structure += f"  {side} plane "
-            for param in plane:
-                structure += f"{param} "
-            structure += "\n"
-        structure += "end structure\n"
-        if side == "inside":
-            side = "over"
-        elif side == "outside":
-            side = "below"
-        structure += f"structure anion.pdb\n"
-        structure += f"  number {number_anion}\n"
-        for plane in self.planes:
-            structure += f"  {side} plane "
-            for param in plane:
-                structure += f"{param} "
-            structure += "\n"
-        structure += "end structure\n"
+        for i,number in enumerate(numbers):
+            if side == "inside":
+                side = "over"
+            elif side == "outside":
+                side = "below"
+            structure += f"structure ion_{i}.pdb\n"
+            structure += f"  number {number}\n"
+            for plane in self.planes:
+                structure += f"  {side} plane "
+                for param in plane:
+                    structure += f"{param} "
+                structure += "\n"
+            structure += "end structure\n"
         return structure
 
     def __call__(self, position):
@@ -375,7 +359,7 @@ class BlockGeometry(Geometry):
     :param orientation: orientation of block
     :type orientation: nested list / ndarray_like
 
-    NB: Does not support pack_water and packmol
+    NB: Does not support pack_solvent and packmol
     NB: This geometry will be deprecated
     """
 
@@ -406,7 +390,7 @@ class BlockGeometry(Geometry):
     def packmol_structure(self, number, side):
         """Make structure to be used in PACKMOL input script
         """
-        raise NotImplementedError("BlockGeometry does not support pack_water")
+        raise NotImplementedError("BlockGeometry does not support pack_solvent")
 
     def __call__(self, atoms):
         tmp_pbc = atoms.get_pbc()
@@ -541,7 +525,7 @@ class BerkovichGeometry(Geometry):
         """Make structure to be used in PACKMOL input script
         """
         raise NotImplementedError(
-            "BerkovichGeometry is not yet supported by pack_water")
+            "BerkovichGeometry is not yet supported by pack_solvent")
 
     def __call__(self, atoms):
         positions = atoms.get_positions()
@@ -605,7 +589,7 @@ class EllipticalCylinderGeometry(Geometry):
     :param orientation: which way the cylinder should point
     :type orientation: ndarray
 
-    NB: This geometry is not supported by packmol or pack_water
+    NB: This geometry is not supported by packmol or pack_solvent
     """
 
     # TODO: Fix orientation argument (two separate orientations)
@@ -627,7 +611,7 @@ class EllipticalCylinderGeometry(Geometry):
         """Make structure to be used in PACKMOL input script
         """
         raise NotImplementedError(
-            "EllipticalCylinderGeometry is not supported by pack_water")
+            "EllipticalCylinderGeometry is not supported by pack_solvent")
 
     def __call__(self, atoms):
         positions = atoms.get_positions()
@@ -695,7 +679,7 @@ class ProceduralSurfaceGeometry(Geometry):
         """Make structure to be used in PACKMOL input script
         """
         raise NotImplementedError(
-            "ProceduralNoiseSurface is not supported by pack_water")
+            "ProceduralNoiseSurface is not supported by pack_solvent")
 
     def __call__(self, atoms):
         positions = atoms.get_positions()
@@ -891,7 +875,7 @@ class ProceduralSurfaceGridGeometry(Geometry):
         """Make structure to be used in PACKMOL input script
         """
         raise NotImplementedError(
-            "ProceduralSurfaceGridGeometry is not supported by pack_water")
+            "ProceduralSurfaceGridGeometry is not supported by pack_solvent")
 
     def __call__(self, atoms):
         positions = atoms.get_positions()
