@@ -210,17 +210,18 @@ class ComplexSolventConfig(MultipleAdsorbateSlabConfig):
 
     def run_packmol(self, packmol_input):
         packmol_cmd = which("packmol")
+        if not packmol_cmd:
+            raise OSError("packmol not found.")
 
-        try:
-            ps = subprocess.Popen(
-                f"{packmol_cmd} < {packmol_input}",
-                shell=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            out, err = ps.communicate()
-        except NotImplementedError:
-            raise OSError("packmol is not found.")
+        ps = subprocess.Popen(
+            f"{packmol_cmd} < {packmol_input}",
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        out, err = ps.communicate()
+        if err:
+            raise OSError(err.decode("utf-8"))
 
     def randomize_coords(self, atoms):
         cell_weights = np.random.rand(3)
