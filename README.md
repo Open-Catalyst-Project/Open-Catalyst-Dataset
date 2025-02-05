@@ -1,4 +1,4 @@
-# THIS REPOSITORY HAS BEEN MOVED TO [http://github.com/fair-chem/fairchem/tree/main/src/fairchem/data/oc](http://github.com/fair-chem/fairchem/tree/main/src/fairchem/data/oc) 
+# REPO DEPRECATION: In 2024 the FAIR Chemistry team consolidated its various resources to improve release/testing/availability, and [Open-Catalyst-Dataset moved to the fairchem repo](https://github.com/FAIR-Chem/fairchem/tree/main/src/fairchem/data/oc). You can find updated documentation on how to use the consolidated resources at https://fair-chem.github.io/
 
 [![CircleCI](https://dl.circleci.com/status-badge/img/gh/Open-Catalyst-Project/Open-Catalyst-Dataset/tree/main.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/Open-Catalyst-Project/Open-Catalyst-Dataset/tree/main)
 [![codecov](https://codecov.io/gh/Open-Catalyst-Project/Open-Catalyst-Dataset/branch/main/graph/badge.svg?token=IZ7J729L6S)](https://codecov.io/gh/Open-Catalyst-Project/Open-Catalyst-Dataset/tree/main)
